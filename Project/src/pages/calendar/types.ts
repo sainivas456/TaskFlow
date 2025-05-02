@@ -7,7 +7,9 @@ export interface TaskType {
   priority: "High" | "Medium" | "Low";
   status: "Not Started" | "In Progress" | "Completed";
   labels: string[];
-  source?: "local" | "google" | "outlook" | "apple"; // Added source field
+  progress: number; // Added this field to match FrontendTask
+  source?: string; // Changed to allow any string to match FrontendTask
+  subtasks?: { id: number; title: string; completed: boolean }[]; // Added to match FrontendTask
 }
 
 export interface NewTaskInput {
@@ -16,7 +18,8 @@ export interface NewTaskInput {
   priority: "High" | "Medium" | "Low";
   status: "Not Started" | "In Progress" | "Completed";
   labels: string[];
-  source?: "local" | "google" | "outlook" | "apple";
+  progress?: number; // Added to match FrontendTask
+  source?: string; // Changed to match FrontendTask
 }
 
 export interface CalendarSyncConfig {

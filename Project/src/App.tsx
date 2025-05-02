@@ -1,88 +1,52 @@
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AppLayout } from "@/components/app-layout";
-import Dashboard from "@/pages/Dashboard";
-import Tasks from "@/pages/Tasks";
-import Calendar from "@/pages/calendar";
-import Labels from "@/pages/Labels";
-import NotFound from "@/pages/NotFound";
-import ERDiagram from "@/docs/ERDiagram";
-import TimeTracking from "@/pages/time-tracking";
-import Collaborators from "@/pages/collaborators";
-import ImportExport from "@/pages/import-export";
-import Settings from "@/pages/settings";
-import Login from "@/pages/auth/Login";
-import Register from "@/pages/auth/Register";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AppLayout } from "./components/app-layout";
+import { ThemeProvider } from "./components/theme-provider";
+import { Toaster } from "./components/ui/sonner";
+import Index from "./pages/Index";
+import Login from "./pages/auth/Login";
+import Register from "./pages/auth/Register";
+import Tasks from "./pages/Tasks";
+import CalendarPage from "./pages/calendar";
+import NotFound from "./pages/NotFound";
+import Labels from "./pages/Labels";
+import ImportExport from "./pages/import-export";
+import Settings from "./pages/settings";
+import TimeTracking from "./pages/time-tracking";
+import Collaborators from "./pages/collaborators";
+import ERDiagram from "./docs/ERDiagram";
+import { AuthProvider } from "./contexts/AuthContext";
+import { QueryProvider } from "./components/QueryProvider";
+import "./App.css";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
-
-// Protected route component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  }
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
-  }
-  
-  return <>{children}</>;
-};
-
-const AppRoutes = () => {
-  const { isAuthenticated } = useAuth();
-  
+function App() {
   return (
-    <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
-      <Route path="/register" element={isAuthenticated ? <Navigate to="/" /> : <Register />} />
-      
-      <Route path="/" element={
-        <ProtectedRoute>
-          <AppLayout />
-        </ProtectedRoute>
-      }>
-        <Route index element={<Dashboard />} />
-        <Route path="tasks" element={<Tasks />} />
-        <Route path="calendar" element={<Calendar />} />
-        <Route path="labels" element={<Labels />} />
-        <Route path="time-tracking" element={<TimeTracking />} />
-        <Route path="collaborators" element={<Collaborators />} />
-        <Route path="import-export" element={<ImportExport />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="er-diagram" element={<ERDiagram />} />
-        <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+    <ThemeProvider defaultTheme="system" storageKey="ui-theme">
+      <QueryProvider>
+        <AuthProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/" element={<AppLayout />}>
+                <Route index element={<Index />} />
+                <Route path="tasks" element={<Tasks />} />
+                <Route path="calendar" element={<CalendarPage />} />
+                <Route path="labels" element={<Labels />} />
+                <Route path="import-export" element={<ImportExport />} />
+                <Route path="time-tracking" element={<TimeTracking />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="collaborators" element={<Collaborators />} />
+                <Route path="docs/er" element={<ERDiagram />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Router>
+          <Toaster position="bottom-right" />
+        </AuthProvider>
+      </QueryProvider>
+    </ThemeProvider>
   );
-};
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+}
 
 export default App;

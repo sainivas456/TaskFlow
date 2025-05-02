@@ -22,3 +22,5 @@ export function AppLayout() {
     </ThemeProvider>
   );
 }
+
+export default AppLayout; // Adding default export as well for backward compatibility

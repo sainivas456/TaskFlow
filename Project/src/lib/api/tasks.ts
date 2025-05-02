@@ -5,63 +5,53 @@ export interface Task {
   task_id: number;
   user_id: number;
   title: string;
-  description?: string;
-  due_date?: string;
-  priority: number;
-  status: "Pending" | "In Progress" | "Completed" | "Overdue";
+  description: string | null;
+  due_date: string;
+  priority: string;
+  status: string;
   created_at: string;
-  completed_at?: string;
+  completed_at: string | null;
+  labels?: string[];
+  progress?: number;
+  subtasks?: any[];
 }
 
-export interface CreateTaskInput {
+export interface CreateTaskData {
   title: string;
   description?: string;
-  due_date?: string;
-  priority: number;
-  status: "Pending" | "In Progress" | "Completed" | "Overdue";
-}
-
-export interface UpdateTaskInput {
-  title?: string;
-  description?: string;
-  due_date?: string;
-  priority?: number;
-  status?: "Pending" | "In Progress" | "Completed" | "Overdue";
+  due_date: string;
+  priority: string;
+  status: string;
 }
 
 export const taskService = {
-  getTasks: () => {
+  // Get all tasks
+  getAllTasks: () => {
     return api.get<Task[]>("/tasks");
   },
   
-  getTask: (taskId: number) => {
+  // Get a single task by ID
+  getTaskById: (taskId: number) => {
     return api.get<Task>(`/tasks/${taskId}`);
   },
   
-  createTask: (taskData: CreateTaskInput) => {
+  // Create a new task
+  createTask: (taskData: CreateTaskData) => {
     return api.post<Task>("/tasks", taskData);
   },
   
-  updateTask: (taskId: number, taskData: UpdateTaskInput) => {
+  // Update a task
+  updateTask: (taskId: number, taskData: Partial<CreateTaskData>) => {
     return api.put<Task>(`/tasks/${taskId}`, taskData);
   },
   
+  // Delete a task
   deleteTask: (taskId: number) => {
     return api.delete(`/tasks/${taskId}`);
   },
   
+  // Mark a task as completed
   completeTask: (taskId: number) => {
-    return api.put<Task>(`/tasks/${taskId}/complete`, {
-      status: "Completed",
-      completed_at: new Date().toISOString(),
-    });
-  },
-  
-  getTasksByStatus: (status: string) => {
-    return api.get<Task[]>(`/tasks?status=${status}`);
-  },
-  
-  getTasksForDate: (date: string) => {
-    return api.get<Task[]>(`/tasks?due_date=${date}`);
-  },
+    return api.put<Task>(`/tasks/${taskId}/complete`, {});
+  }
 };

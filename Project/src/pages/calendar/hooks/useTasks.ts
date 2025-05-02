@@ -2,87 +2,9 @@
 import { useState, useEffect } from "react";
 import { TaskType, NewTaskInput, CalendarSyncConfig } from "../types";
 import { toast } from "sonner";
-
-// Mock data - tasks with dates
-const mockTasks: TaskType[] = [
-  {
-    id: 1,
-    title: "Data base project proposal - submission",
-    description: "Complete the database schema and submit proposal",
-    dueDate: new Date(2024, 2, 10),
-    priority: "High",
-    status: "In Progress",
-    labels: ["CS-508", "UAlbany", "data base"],
-    source: "local"
-  },
-  {
-    id: 2,
-    title: "Research paper literature review",
-    description: "Review 5 papers on machine learning algorithms",
-    dueDate: new Date(2024, 2, 15),
-    priority: "Medium",
-    status: "Not Started",
-    labels: ["CS-508", "UAlbany", "Research"],
-    source: "local"
-  },
-  {
-    id: 3,
-    title: "Weekly team meeting notes",
-    description: "Prepare notes for the upcoming team meeting",
-    dueDate: new Date(2024, 2, 8),
-    priority: "Low",
-    status: "Completed",
-    labels: ["Personal", "Meeting"],
-    source: "local"
-  },
-  {
-    id: 4,
-    title: "Update project timeline",
-    description: "Adjust timeline based on new requirements",
-    dueDate: new Date(2024, 2, 9),
-    priority: "Medium",
-    status: "In Progress",
-    labels: ["CS-508", "Planning"],
-    source: "local"
-  },
-  {
-    id: 5,
-    title: "Prepare presentation slides",
-    description: "Create slides for the midterm presentation",
-    dueDate: new Date(2024, 2, 20),
-    priority: "High",
-    status: "Not Started",
-    labels: ["CS-508", "Presentation"],
-    source: "local"
-  },
-  {
-    id: 6,
-    title: "Submit research application",
-    dueDate: new Date(2024, 2, 12),
-    priority: "High",
-    status: "Not Started",
-    labels: ["Research", "UAlbany"],
-    source: "local"
-  },
-  {
-    id: 7,
-    title: "Review project requirements",
-    dueDate: new Date(2024, 2, 7),
-    priority: "Medium",
-    status: "Completed",
-    labels: ["CS-508"],
-    source: "local"
-  },
-  {
-    id: 8,
-    title: "Team retrospective meeting",
-    dueDate: new Date(2024, 2, 17),
-    priority: "Medium",
-    status: "Not Started",
-    labels: ["Meeting", "Team"],
-    source: "local"
-  },
-];
+import { taskService } from "@/lib/api/tasks";
+import { adaptTaskFromApi, adaptTaskToApi } from "@/lib/utils/taskUtils";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Initial sync configurations
 const initialSyncConfigs: CalendarSyncConfig[] = [
@@ -91,7 +13,7 @@ const initialSyncConfigs: CalendarSyncConfig[] = [
   { provider: "apple", enabled: false },
 ];
 
-// Mock external calendar events
+// Mock external calendar events - would be replaced with real API calls in production
 const mockGoogleEvents: TaskType[] = [
   {
     id: 101,
@@ -142,13 +64,110 @@ const mockAppleEvents: TaskType[] = [
 ];
 
 export function useTasks(selectedDate: Date | undefined) {
-  const [tasks, setTasks] = useState<TaskType[]>(mockTasks);
   const [tasksForDate, setTasksForDate] = useState<TaskType[]>([]);
   const [syncConfigs, setSyncConfigs] = useState<CalendarSyncConfig[]>(initialSyncConfigs);
   
+  const queryClient = useQueryClient();
+  
+  // Fetch tasks from API
+  const { data: tasks = [], isLoading, error } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => {
+      const response = await taskService.getAllTasks();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      // Convert API tasks to frontend format
+      return response.data ? response.data.map(adaptTaskFromApi) : [];
+    }
+  });
+  
+  // Add task mutation
+  const addTaskMutation = useMutation({
+    mutationFn: async (newTaskData: {task: NewTaskInput, dueDate: Date}) => {
+      const { task, dueDate } = newTaskData;
+      const apiTask = {
+        title: task.title,
+        description: task.description || "",
+        due_date: dueDate.toISOString(),
+        priority: task.priority || "Medium",
+        status: task.status || "Not Started",
+        labels: task.labels || []
+      };
+      
+      const response = await taskService.createTask(apiTask);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return adaptTaskFromApi(response.data!);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success("Task added successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to add task: ${error.message}`);
+    }
+  });
+  
+  // Edit task mutation
+  const editTaskMutation = useMutation({
+    mutationFn: async ({taskId, updatedTask}: {taskId: number, updatedTask: Partial<TaskType>}) => {
+      const apiTask = adaptTaskToApi(updatedTask as TaskType);
+      const response = await taskService.updateTask(taskId, apiTask);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return adaptTaskFromApi(response.data!);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success("Task updated successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update task: ${error.message}`);
+    }
+  });
+  
+  // Delete task mutation
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId: number) => {
+      const response = await taskService.deleteTask(taskId);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return taskId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success("Task deleted successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete task: ${error.message}`);
+    }
+  });
+  
+  // Update task status mutation
+  const updateTaskStatusMutation = useMutation({
+    mutationFn: async ({taskId, status}: {taskId: number, status: TaskType["status"]}) => {
+      const response = await taskService.updateTask(taskId, { status });
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return adaptTaskFromApi(response.data!);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success("Task status updated successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update task status: ${error.message}`);
+    }
+  });
+  
   // Update tasks for selected date
   useEffect(() => {
-    if (!selectedDate) {
+    if (!selectedDate || !tasks.length) {
       setTasksForDate([]);
       return;
     }
@@ -167,31 +186,12 @@ export function useTasks(selectedDate: Date | undefined) {
   
   // Add a new task
   const addTask = (newTask: NewTaskInput, dueDate: Date) => {
-    const newTaskObject = {
-      id: tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) + 1 : 1,
-      ...newTask,
-      dueDate: dueDate,
-      source: newTask.source || "local"
-    };
-    
-    setTasks([...tasks, newTaskObject as TaskType]);
-    toast.success("Task added successfully");
+    addTaskMutation.mutate({ task: newTask, dueDate });
   };
   
   // Edit an existing task
   const editTask = (taskId: number, updatedTask: Partial<TaskType>) => {
-    const taskIndex = tasks.findIndex(task => task.id === taskId);
-    
-    if (taskIndex === -1) {
-      toast.error("Task not found");
-      return;
-    }
-    
-    const updatedTasks = [...tasks];
-    updatedTasks[taskIndex] = { ...updatedTasks[taskIndex], ...updatedTask };
-    
-    setTasks(updatedTasks);
-    toast.success("Task updated successfully");
+    editTaskMutation.mutate({ taskId, updatedTask });
   };
   
   // Delete a task
@@ -203,31 +203,19 @@ export function useTasks(selectedDate: Date | undefined) {
       return;
     }
     
-    const updatedTasks = tasks.filter(task => task.id !== taskId);
-    setTasks(updatedTasks);
-    toast.success("Task deleted successfully");
+    deleteTaskMutation.mutate(taskId);
   };
   
   // Update task status
   const updateTaskStatus = (taskId: number, status: TaskType["status"]) => {
-    const taskIndex = tasks.findIndex(task => task.id === taskId);
+    const taskToUpdate = tasks.find(task => task.id === taskId);
     
-    if (taskIndex === -1) {
-      toast.error("Task not found");
-      return;
-    }
-    
-    const taskToUpdate = tasks[taskIndex];
-    if (taskToUpdate.source && taskToUpdate.source !== "local") {
+    if (taskToUpdate?.source && taskToUpdate.source !== "local") {
       toast.error(`Cannot update task from ${taskToUpdate.source} calendar. Sync is read-only in this demo.`);
       return;
     }
     
-    const updatedTasks = [...tasks];
-    updatedTasks[taskIndex] = { ...updatedTasks[taskIndex], status };
-    
-    setTasks(updatedTasks);
-    toast.success(`Task marked as ${status}`);
+    updateTaskStatusMutation.mutate({ taskId, status });
   };
   
   // Save sync configurations
@@ -243,7 +231,7 @@ export function useTasks(selectedDate: Date | undefined) {
     });
   };
   
-  // Sync calendar data
+  // Sync calendar data (mock implementation)
   const syncCalendar = async (provider: "google" | "outlook" | "apple") => {
     return new Promise<void>((resolve, reject) => {
       // Simulate API call with timeout
@@ -264,12 +252,6 @@ export function useTasks(selectedDate: Date | undefined) {
               break;
           }
           
-          // Remove existing tasks from this provider
-          const filteredTasks = tasks.filter(task => task.source !== provider);
-          
-          // Add new tasks from provider
-          setTasks([...filteredTasks, ...externalTasks]);
-          
           // Update sync config's last synced time
           const updatedConfigs = syncConfigs.map(config => 
             config.provider === provider 
@@ -278,6 +260,11 @@ export function useTasks(selectedDate: Date | undefined) {
           );
           setSyncConfigs(updatedConfigs);
           
+          // In a real implementation, we would send these to the backend
+          // For now, we'll just show them in the UI without persisting
+          queryClient.setQueryData(['tasks'], [...tasks.filter(task => task.source !== provider), ...externalTasks]);
+          
+          toast.success(`Synced with ${provider} calendar`);
           resolve();
         } catch (error) {
           reject(error);
@@ -295,6 +282,8 @@ export function useTasks(selectedDate: Date | undefined) {
     updateTaskStatus,
     syncConfigs,
     saveSyncConfigs,
-    syncCalendar
+    syncCalendar,
+    isLoading,
+    error
   };
 }
