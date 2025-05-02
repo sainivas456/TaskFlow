@@ -23,6 +23,7 @@ const mockGoogleEvents: TaskType[] = [
     priority: "Medium",
     status: "Not Started",
     labels: ["Conference", "Tech"],
+    progress: 0, // Added progress property
     source: "google"
   },
   {
@@ -33,6 +34,7 @@ const mockGoogleEvents: TaskType[] = [
     priority: "Low",
     status: "Not Started",
     labels: ["Workshop", "Learning"],
+    progress: 0, // Added progress property
     source: "google"
   }
 ];
@@ -46,6 +48,7 @@ const mockOutlookEvents: TaskType[] = [
     priority: "High",
     status: "Not Started",
     labels: ["Client", "Business"],
+    progress: 0, // Added progress property
     source: "outlook"
   }
 ];
@@ -59,6 +62,7 @@ const mockAppleEvents: TaskType[] = [
     priority: "Medium",
     status: "Not Started",
     labels: ["Health", "Personal"],
+    progress: 0, // Added progress property
     source: "apple"
   }
 ];
