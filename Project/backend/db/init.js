@@ -15,14 +15,29 @@ async function initializeDatabase() {
 
   try {
     await client.connect();
-    console.log('Connected to database');
+    console.log('Connected to database for initialization');
 
-    // Read SQL file
+    // Check if tables already exist
+    const tableCheckQuery = `
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name = 'users'
+    `;
+    
+    const tableResult = await client.query(tableCheckQuery);
+    
+    if (tableResult.rows.length > 0) {
+      console.log('Tables already exist in the database. Skipping initialization.');
+      return true;
+    }
+
+    // If tables don't exist, read SQL file and create them
+    console.log('No existing tables found. Creating database schema...');
     const sqlFilePath = path.join(__dirname, 'init.sql');
     const sql = fs.readFileSync(sqlFilePath, 'utf8');
 
     // Execute SQL commands
-    console.log('Creating database schema...');
     await client.query(sql);
     console.log('Database schema created successfully');
 
@@ -32,7 +47,7 @@ async function initializeDatabase() {
     return false;
   } finally {
     await client.end();
-    console.log('Database connection closed');
+    console.log('Database initialization connection closed');
   }
 }
 
