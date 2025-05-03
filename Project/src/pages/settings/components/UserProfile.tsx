@@ -8,23 +8,84 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Camera } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { authService, PasswordChangeData } from "@/lib/api/auth";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string().min(1, "Please confirm your password"),
+}).refine(data => data.newPassword === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export function UserProfile() {
-  // Mock user data
+  const { currentUser } = useAuth();
   const [userData, setUserData] = useState({
-    name: "John Doe",
-    email: "john.doe@example.com",
+    name: currentUser?.username || "User",
+    email: currentUser?.email || "",
     bio: "Task management enthusiast and productivity expert.",
     profileImage: "/placeholder.svg",
   });
   
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const passwordForm = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
 
   const handleSave = () => {
     toast({
       title: "Profile updated",
       description: "Your profile information has been saved.",
     });
+  };
+
+  const handlePasswordChange = async (values: PasswordFormValues) => {
+    setIsSubmitting(true);
+    
+    try {
+      const passwordData: PasswordChangeData = {
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword
+      };
+      
+      await authService.changePassword(passwordData);
+      
+      toast({
+        title: "Password updated",
+        description: "Your password has been changed successfully.",
+      });
+      
+      passwordForm.reset({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (error: any) {
+      console.error("Password change error:", error);
+      
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update password. Please check your current password and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -113,40 +174,64 @@ export function UserProfile() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-            <Label htmlFor="current-password" className="md:text-right">
-              Current Password
-            </Label>
-            <Input
-              id="current-password"
-              type="password"
-              className="md:col-span-3"
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-            <Label htmlFor="new-password" className="md:text-right">
-              New Password
-            </Label>
-            <Input
-              id="new-password"
-              type="password"
-              className="md:col-span-3"
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
-            <Label htmlFor="confirm-password" className="md:text-right">
-              Confirm Password
-            </Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              className="md:col-span-3"
-            />
-          </div>
+          <Form {...passwordForm}>
+            <form onSubmit={passwordForm.handleSubmit(handlePasswordChange)} className="space-y-4">
+              <FormField
+                control={passwordForm.control}
+                name="currentPassword"
+                render={({ field }) => (
+                  <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+                    <FormLabel className="md:text-right">Current Password</FormLabel>
+                    <div className="md:col-span-3">
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </div>
+                  </div>
+                )}
+              />
+              
+              <FormField
+                control={passwordForm.control}
+                name="newPassword"
+                render={({ field }) => (
+                  <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+                    <FormLabel className="md:text-right">New Password</FormLabel>
+                    <div className="md:col-span-3">
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </div>
+                  </div>
+                )}
+              />
+              
+              <FormField
+                control={passwordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-4">
+                    <FormLabel className="md:text-right">Confirm Password</FormLabel>
+                    <div className="md:col-span-3">
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </div>
+                  </div>
+                )}
+              />
+              
+              <div className="flex justify-end mt-4">
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Updating..." : "Update Password"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </CardContent>
-        <CardFooter className="flex justify-end space-x-2">
-          <Button>Update Password</Button>
-        </CardFooter>
       </Card>
     </div>
   );

@@ -32,6 +32,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Updated mock data to include subtasks
 const initialTasks = [
@@ -117,14 +118,38 @@ const categories = [
   { id: 8, name: "Shared", count: 3 },
 ];
 
+// Helper component for empty state
+const ClipboardIcon = ({ size = 24 }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+  </svg>
+);
+
 export default function Tasks() {
+  const { currentUser } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState(categories[0]);
+  const [tasks, setTasks] = useState(initialTasks);
   const [filteredTasks, setFilteredTasks] = useState(initialTasks);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [openTaskDetail, setOpenTaskDetail] = useState(false);
   const [newSubtask, setNewSubtask] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState({
+    priority: null as string | null,
+    status: null as string | null
+  });
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
@@ -137,10 +162,15 @@ export default function Tasks() {
   });
   const [newLabel, setNewLabel] = useState("");
 
-  // Filter tasks based on selected category and search query
+  // Apply all filters whenever filter parameters change
   useEffect(() => {
-    let filtered = [...initialTasks];
+    applyFilters();
+  }, [selectedCategory, searchQuery, activeFilters, tasks]);
 
+  // Apply all filters (category, search, priority, status)
+  const applyFilters = () => {
+    let filtered = [...tasks];
+    
     // Apply category filter
     if (selectedCategory.id !== 1) { // Not "All Tasks"
       if (selectedCategory.id === 2) { // Today
@@ -177,8 +207,26 @@ export default function Tasks() {
       );
     }
 
+    // Apply priority filter
+    if (activeFilters.priority) {
+      filtered = filtered.filter(task => task.priority === activeFilters.priority);
+    }
+
+    // Apply status filter
+    if (activeFilters.status) {
+      filtered = filtered.filter(task => task.status === activeFilters.status);
+    }
+
     setFilteredTasks(filtered);
-  }, [selectedCategory, searchQuery]);
+  };
+
+  // Apply a specific filter
+  const applyFilter = (filterType: 'priority' | 'status', value: string | null) => {
+    setActiveFilters(prev => ({
+      ...prev,
+      [filterType]: value
+    }));
+  };
 
   const handleTaskClick = (task: any) => {
     setSelectedTask(task);
@@ -203,11 +251,11 @@ export default function Tasks() {
       // Update selectedTask
       setSelectedTask(updatedTask);
       
-      // Also update the task in the filteredTasks array
-      const updatedTasks = filteredTasks.map(task => 
+      // Also update the task in the tasks array
+      const updatedTasks = tasks.map(task => 
         task.id === updatedTask.id ? updatedTask : task
       );
-      setFilteredTasks(updatedTasks);
+      setTasks(updatedTasks);
       
       // Show success message
       toast.success(`Subtask ${subtask.completed ? 'completed' : 'marked as incomplete'}`);
@@ -243,11 +291,11 @@ export default function Tasks() {
     setSelectedTask(updatedTask);
     setNewSubtask("");
     
-    // Update the task in the filteredTasks array
-    const updatedTasks = filteredTasks.map(task => 
+    // Update the task in the tasks array
+    const updatedTasks = tasks.map(task => 
       task.id === updatedTask.id ? updatedTask : task
     );
-    setFilteredTasks(updatedTasks);
+    setTasks(updatedTasks);
     
     // Show success message
     toast.success("Subtask added successfully");
@@ -271,11 +319,11 @@ export default function Tasks() {
     // Update state
     setSelectedTask(updatedTask);
     
-    // Update the task in the filteredTasks array
-    const updatedTasks = filteredTasks.map(task => 
+    // Update the task in the tasks array
+    const updatedTasks = tasks.map(task => 
       task.id === updatedTask.id ? updatedTask : task
     );
-    setFilteredTasks(updatedTasks);
+    setTasks(updatedTasks);
     
     // Show success message
     toast.success("Subtask deleted");
@@ -293,7 +341,7 @@ export default function Tasks() {
     }
 
     // Generate a new task ID
-    const newId = Math.max(...filteredTasks.map(task => task.id), 0) + 1;
+    const newId = Math.max(...tasks.map(task => task.id), 0) + 1;
     
     // Create the new task
     const taskToAdd = {
@@ -303,7 +351,8 @@ export default function Tasks() {
     };
 
     // Add to tasks list
-    setFilteredTasks([taskToAdd, ...filteredTasks]);
+    const updatedTasks = [taskToAdd, ...tasks];
+    setTasks(updatedTasks);
     
     // Reset form and close dialog
     setNewTask({
@@ -323,8 +372,8 @@ export default function Tasks() {
 
   const handleDeleteTask = (taskId: number) => {
     // Filter out the task to delete
-    const updatedTasks = filteredTasks.filter(task => task.id !== taskId);
-    setFilteredTasks(updatedTasks);
+    const updatedTasks = tasks.filter(task => task.id !== taskId);
+    setTasks(updatedTasks);
     
     // Close dialog if open
     setOpenTaskDetail(false);
@@ -334,12 +383,12 @@ export default function Tasks() {
 
   const handleUpdateTaskStatus = (taskId: number, status: string) => {
     // Update task status
-    const updatedTasks = filteredTasks.map(task => 
+    const updatedTasks = tasks.map(task => 
       task.id === taskId 
         ? { ...task, status } 
         : task
     );
-    setFilteredTasks(updatedTasks);
+    setTasks(updatedTasks);
     
     // If selected task is open, update it too
     if (selectedTask && selectedTask.id === taskId) {
@@ -361,11 +410,11 @@ export default function Tasks() {
         // Update state
         setSelectedTask(updatedTask);
         
-        // Update in filtered tasks
-        const updatedTasks = filteredTasks.map(task => 
+        // Update in tasks
+        const updatedTasks = tasks.map(task => 
           task.id === updatedTask.id ? updatedTask : task
         );
-        setFilteredTasks(updatedTasks);
+        setTasks(updatedTasks);
       }
     } else if (newTask.title) {
       // Add label to new task being created
@@ -382,7 +431,7 @@ export default function Tasks() {
 
   const removeLabel = (taskId: number, labelToRemove: string) => {
     // Remove label from task
-    const updatedTasks = filteredTasks.map(task => {
+    const updatedTasks = tasks.map(task => {
       if (task.id === taskId) {
         return {
           ...task,
@@ -392,7 +441,7 @@ export default function Tasks() {
       return task;
     });
     
-    setFilteredTasks(updatedTasks);
+    setTasks(updatedTasks);
     
     // If selected task is open, update it too
     if (selectedTask && selectedTask.id === taskId) {
@@ -401,6 +450,15 @@ export default function Tasks() {
         labels: selectedTask.labels.filter((label: string) => label !== labelToRemove)
       });
     }
+  };
+
+  // Reset all filters
+  const resetFilters = () => {
+    setActiveFilters({
+      priority: null,
+      status: null
+    });
+    setSearchQuery("");
   };
 
   return (
@@ -455,6 +513,19 @@ export default function Tasks() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            
+            {(activeFilters.priority || activeFilters.status) && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={resetFilters} 
+                className="gap-1"
+              >
+                <X size={14} />
+                Clear filters
+              </Button>
+            )}
+            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="flex items-center gap-1">
@@ -464,42 +535,45 @@ export default function Tasks() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => setSelectedCategory(categories[0])}>
+                <DropdownMenuItem onClick={() => resetFilters()}>
                   All Tasks
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => {
-                  const filtered = initialTasks.filter(task => task.priority === "High");
-                  setFilteredTasks(filtered);
-                }}>
+                <DropdownMenuItem 
+                  onClick={() => applyFilter('priority', 'High')}
+                  className={activeFilters.priority === 'High' ? 'bg-accent' : ''}
+                >
                   Priority: High
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                  const filtered = initialTasks.filter(task => task.priority === "Medium");
-                  setFilteredTasks(filtered);
-                }}>
+                <DropdownMenuItem 
+                  onClick={() => applyFilter('priority', 'Medium')}
+                  className={activeFilters.priority === 'Medium' ? 'bg-accent' : ''}
+                >
                   Priority: Medium
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                  const filtered = initialTasks.filter(task => task.priority === "Low");
-                  setFilteredTasks(filtered);
-                }}>
+                <DropdownMenuItem 
+                  onClick={() => applyFilter('priority', 'Low')}
+                  className={activeFilters.priority === 'Low' ? 'bg-accent' : ''}
+                >
                   Priority: Low
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setSelectedCategory(categories[3])}>
+                <DropdownMenuItem 
+                  onClick={() => applyFilter('status', 'Completed')}
+                  className={activeFilters.status === 'Completed' ? 'bg-accent' : ''}
+                >
                   Status: Completed
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                  const filtered = initialTasks.filter(task => task.status === "In Progress");
-                  setFilteredTasks(filtered);
-                }}>
+                <DropdownMenuItem 
+                  onClick={() => applyFilter('status', 'In Progress')}
+                  className={activeFilters.status === 'In Progress' ? 'bg-accent' : ''}
+                >
                   Status: In Progress
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {
-                  const filtered = initialTasks.filter(task => task.status === "Not Started");
-                  setFilteredTasks(filtered);
-                }}>
+                <DropdownMenuItem 
+                  onClick={() => applyFilter('status', 'Not Started')}
+                  className={activeFilters.status === 'Not Started' ? 'bg-accent' : ''}
+                >
                   Status: Not Started
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -586,8 +660,8 @@ export default function Tasks() {
                   </div>
                   <h3 className="text-lg font-medium mb-2">No tasks found</h3>
                   <p className="text-muted-foreground max-w-md mb-6">
-                    {searchQuery ? 
-                      "No tasks match your search criteria. Try a different search term." : 
+                    {searchQuery || activeFilters.priority || activeFilters.status ? 
+                      "No tasks match your filter criteria. Try adjusting your filters." : 
                       "No tasks in this category. Add a task to get started."}
                   </p>
                   <Button className="gap-2" onClick={() => setAddTaskOpen(true)}>
@@ -850,11 +924,10 @@ export default function Tasks() {
             <div className="grid gap-2">
               <label htmlFor="dueDate" className="text-sm font-medium">Due Date</label>
               <Input 
-                id="dueDate"
+                id="dueDate" 
                 type="date"
                 value={newTask.dueDate}
                 onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})}
-                min={new Date().toISOString().split('T')[0]}
               />
             </div>
             
@@ -867,9 +940,9 @@ export default function Tasks() {
                   value={newTask.priority}
                   onChange={(e) => setNewTask({...newTask, priority: e.target.value})}
                 >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
                   <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
                 </select>
               </div>
               
@@ -908,11 +981,12 @@ export default function Tasks() {
                   </Badge>
                 ))}
               </div>
-              <div className="flex gap-2">
-                <Input 
-                  placeholder="Add label"
+              <div className="flex items-center space-x-2">
+                <Input
+                  placeholder="Add new label"
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
+                  className="text-sm"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       handleAddLabel();
@@ -931,25 +1005,5 @@ export default function Tasks() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-// ClipboardIcon component for the empty state
-function ClipboardIcon({ size = 24 }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-    </svg>
   );
 }

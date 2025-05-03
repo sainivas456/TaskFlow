@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Calendar,
   ChevronLeft,
@@ -41,6 +41,7 @@ const sidebarItems = [
 ];
 
 export function AppSidebar() {
+  const navigate = useNavigate();
   const location = useLocation();
   const [expanded, setExpanded] = useState(true);
   const [newTaskDialogOpen, setNewTaskDialogOpen] = useState(false);
@@ -103,7 +104,11 @@ export function AppSidebar() {
         <SidebarFooter className="p-4 border-t border-border/40">
           <div className="flex items-center justify-between">
             <ThemeSwitcher />
-            <Button size="icon" variant="ghost">
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              onClick={() => navigate('/settings')}
+            >
               <Settings size={18} />
             </Button>
           </div>

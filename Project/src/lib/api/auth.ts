@@ -19,6 +19,11 @@ export interface RegisterData {
   password: string;
 }
 
+export interface PasswordChangeData {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface AuthResponse {
   user: User;
   token: string;
@@ -54,5 +59,9 @@ export const authService = {
   saveAuthData: (data: AuthResponse) => {
     localStorage.setItem("auth_token", data.token);
     localStorage.setItem("user_data", JSON.stringify(data.user));
+  },
+  
+  changePassword: (data: PasswordChangeData) => {
+    return api.post("/auth/change-password", data);
   },
 };

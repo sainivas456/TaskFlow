@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
@@ -153,6 +152,63 @@ router.get('/me', auth, async (req, res) => {
     }
     
     res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   POST api/auth/change-password
+// @desc    Change user password
+// @access  Private
+router.post('/change-password', [
+  auth,
+  [
+    check('currentPassword', 'Current password is required').exists(),
+    check('newPassword', 'New password must be at least 6 characters').isLength({ min: 6 })
+  ]
+], async (req, res) => {
+  const errors = validationResult(req);
+  
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { currentPassword, newPassword } = req.body;
+  
+  try {
+    const db = req.db;
+    
+    // Get user from database
+    const result = await db.query(
+      'SELECT * FROM Users WHERE user_id = $1',
+      [req.user.id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    const user = result.rows[0];
+    
+    // Check if current password is correct
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+    
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Current password is incorrect' });
+    }
+    
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    
+    // Update password in database
+    await db.query(
+      'UPDATE Users SET password_hash = $1 WHERE user_id = $2',
+      [hashedPassword, req.user.id]
+    );
+    
+    res.json({ message: 'Password updated successfully' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
