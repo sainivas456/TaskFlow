@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const registerSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -49,7 +50,10 @@ export default function Register() {
       );
       
       if (success) {
-        navigate("/");
+        toast.success("Account created successfully! Please log in.");
+        navigate("/login");
+      } else {
+        toast.error("Failed to create account. Please try again.");
       }
     } finally {
       setIsLoading(false);

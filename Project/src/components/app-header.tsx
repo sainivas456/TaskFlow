@@ -1,5 +1,6 @@
 
-import { Bell, Search, User } from "lucide-react";
+import { Bell, Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,8 +13,28 @@ import {
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function AppHeader() {
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
+  // Get user initials for the avatar
+  const getUserInitials = () => {
+    if (!currentUser || !currentUser.username) return "?";
+    return currentUser.username
+      .split(" ")
+      .map(name => name[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
     <header className="border-b border-border/40 animate-fade-in">
       <div className="flex items-center justify-between h-16 px-6">
@@ -73,25 +94,25 @@ export function AppHeader() {
                 className="rounded-full h-8 w-8 p-0 overflow-hidden"
               >
                 <Avatar>
-                  <AvatarFallback className="bg-primary/10 text-primary">JD</AvatarFallback>
+                  <AvatarFallback className="bg-primary/10 text-primary">{getUserInitials()}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 animate-scale-in">
               <DropdownMenuLabel className="flex items-center gap-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary/10 text-primary">JD</AvatarFallback>
+                  <AvatarFallback className="bg-primary/10 text-primary">{getUserInitials()}</AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium">John Doe</span>
-                  <span className="text-xs text-muted-foreground">john.doe@example.com</span>
+                  <span className="text-sm font-medium">{currentUser?.username || "Guest"}</span>
+                  <span className="text-xs text-muted-foreground">{currentUser?.email || "Not logged in"}</span>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer">Profile</DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">Settings</DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/settings")}>Profile</DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/settings")}>Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer text-destructive">
+              <DropdownMenuItem className="cursor-pointer text-destructive" onClick={handleLogout}>
                 Log out
               </DropdownMenuItem>
             </DropdownMenuContent>

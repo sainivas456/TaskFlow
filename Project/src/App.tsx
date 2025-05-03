@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AppLayout } from "./components/app-layout";
 import { ThemeProvider } from "./components/theme-provider";
 import { Toaster } from "./components/ui/sonner";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -26,19 +27,26 @@ function App() {
         <AuthProvider>
           <Router>
             <Routes>
+              {/* Public routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/" element={<AppLayout />}>
-                <Route index element={<Index />} />
-                <Route path="tasks" element={<Tasks />} />
-                <Route path="calendar" element={<CalendarPage />} />
-                <Route path="labels" element={<Labels />} />
-                <Route path="import-export" element={<ImportExport />} />
-                <Route path="time-tracking" element={<TimeTracking />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="collaborators" element={<Collaborators />} />
-                <Route path="docs/er" element={<ERDiagram />} />
+              
+              {/* Protected routes */}
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppLayout />}>
+                  <Route index element={<Index />} />
+                  <Route path="tasks" element={<Tasks />} />
+                  <Route path="calendar" element={<CalendarPage />} />
+                  <Route path="labels" element={<Labels />} />
+                  <Route path="import-export" element={<ImportExport />} />
+                  <Route path="time-tracking" element={<TimeTracking />} />
+                  <Route path="settings" element={<Settings />} />
+                  <Route path="collaborators" element={<Collaborators />} />
+                  <Route path="docs/er" element={<ERDiagram />} />
+                </Route>
               </Route>
+              
+              {/* 404 route */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Router>
