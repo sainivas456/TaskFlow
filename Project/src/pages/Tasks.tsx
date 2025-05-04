@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { taskService } from "@/lib/api/tasks";
+import { NewTaskDialog } from "@/components/task/NewTaskDialog";
 
 // Helper component for empty state
 const ClipboardIcon = ({ size = 24 }) => (
@@ -253,6 +254,14 @@ export default function Tasks() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle task creation success
+  const handleTaskAdded = () => {
+    console.log("Task added callback triggered");
+    // Refresh the task list
+    fetchTasks();
+    toast.success("Task created successfully");
   };
 
   // Update categories count based on tasks
@@ -940,6 +949,9 @@ export default function Tasks() {
                         </button>
                       </Badge>
                     ))}
+                    {!selectedTask.labels || selectedTask.labels.length === 0 && (
+                      <div className="text-sm text-muted-foreground">No labels added</div>
+                    )}
                   </div>
                 </div>
                 
@@ -948,7 +960,7 @@ export default function Tasks() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-sm font-medium">Subtasks</h4>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center space-x-2">
                       <Input
                         id="new-subtask-input"
                         placeholder="Add new subtask"
@@ -968,11 +980,12 @@ export default function Tasks() {
                   <div className="space-y-2">
                     {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
                       selectedTask.subtasks.map((subtask: any) => (
-                        <div key={subtask.id} className="flex items-center gap-2">
+                        <div key={subtask.id} className="flex items-start gap-2">
                           <Checkbox 
                             id={`subtask-${subtask.id}`}
                             checked={subtask.completed}
                             onCheckedChange={() => toggleSubtaskCompletion(subtask.id)}
+                            className="mt-0.5"
                           />
                           <label 
                             htmlFor={`subtask-${subtask.id}`}
@@ -984,50 +997,47 @@ export default function Tasks() {
                             {subtask.title}
                           </label>
                           <Button 
-                            size="icon" 
                             variant="ghost" 
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => deleteSubtask(subtask.id)}
+                            size="icon" 
+                            className="h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteSubtask(subtask.id);
+                            }}
                           >
-                            <X size={14} />
+                            <Trash2 size={14} />
                           </Button>
                         </div>
                       ))
                     ) : (
-                      <div className="text-sm text-muted-foreground text-center py-2">
-                        No subtasks yet. Add one above.
+                      <div className="text-sm text-muted-foreground">
+                        No subtasks added
                       </div>
                     )}
                   </div>
                   
                   {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
                     <div className="mt-4">
-                      <Progress value={selectedTask.progress || 0} className="h-1" />
-                      <div className="flex justify-end mt-1">
-                        <span className="text-xs text-muted-foreground">{selectedTask.progress || 0}% complete</span>
+                      <div className="flex items-center justify-between mb-1 text-xs">
+                        <span>Progress</span>
+                        <span>{selectedTask.progress || 0}%</span>
                       </div>
+                      <Progress value={selectedTask.progress || 0} className="h-1.5" />
                     </div>
                   )}
                 </div>
-                
-                <Separator />
-                
-                <DialogFooter className="flex justify-end gap-2">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setOpenTaskDetail(false)}
-                  >
-                    Close
-                  </Button>
-                  <Button onClick={() => completeTask(selectedTask.task_id)}>
-                    Mark as Completed
-                  </Button>
-                </DialogFooter>
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
+      
+      {/* New Task Dialog */}
+      <NewTaskDialog 
+        open={addTaskOpen} 
+        onOpenChange={setAddTaskOpen} 
+        onTaskAdded={handleTaskAdded}
+      />
     </div>
   );
 }

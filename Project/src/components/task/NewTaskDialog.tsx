@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { taskService } from "@/lib/api/tasks";
-import { adaptTaskToApi } from "@/lib/utils/taskUtils";
+import { mapPriorityToDb, mapStatusToDb } from "@/lib/utils/taskUtils";
 
 interface NewTaskDialogProps {
   open: boolean;
@@ -69,18 +69,19 @@ export function NewTaskDialog({ open, onOpenChange, onTaskAdded }: NewTaskDialog
 
     try {
       setIsSubmitting(true);
+      console.log("Submitting task data:", taskData);
       
       // Convert task data to the format expected by the API
       const apiTaskData = {
         title: taskData.title,
         description: taskData.description || "",
         due_date: taskData.dueDate,
-        priority: taskData.priority === "High" ? 5 : taskData.priority === "Medium" ? 3 : 1,
-        status: taskData.status === "Not Started" ? "Pending" : taskData.status,
+        priority: mapPriorityToDb(taskData.priority),
+        status: mapStatusToDb(taskData.status),
         labels: taskData.labels
       };
       
-      console.log("Creating new task with data:", apiTaskData);
+      console.log("Converting to API task data:", apiTaskData);
       const response = await taskService.createTask(apiTaskData);
       
       if (response.error) {

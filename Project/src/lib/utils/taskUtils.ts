@@ -22,7 +22,7 @@ function mapPriorityFromDb(dbPriority: number): "High" | "Medium" | "Low" {
 }
 
 // Map text priority to database representation (1-5)
-function mapPriorityToDb(priority: string): number {
+export function mapPriorityToDb(priority: string): number {
   switch (priority) {
     case "High": return 5;
     case "Medium": return 3;
@@ -43,7 +43,7 @@ function mapStatusFromDb(dbStatus: string): "Completed" | "In Progress" | "Not S
 }
 
 // Map frontend status to database representation
-function mapStatusToDb(status: string): string {
+export function mapStatusToDb(status: string): string {
   switch (status) {
     case "Completed": return "Completed";
     case "In Progress": return "In Progress";
