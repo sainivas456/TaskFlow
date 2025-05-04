@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { 
   CalendarDays, CheckCircle2, ChevronDown, CircleDashed, 
   Clock, Edit, Filter, MoreHorizontal, Plus, Search, 
-  Trash2, UserPlus, X 
+  Trash2, UserPlus, X, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,90 +33,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-
-// Updated mock data to include subtasks
-const initialTasks = [
-  {
-    id: 1,
-    title: "Data base project proposal - submission",
-    description: "Complete the database schema and submit proposal",
-    dueDate: "2024-03-10",
-    priority: "High",
-    status: "In Progress",
-    labels: ["CS-508", "UAlbany", "data base"],
-    progress: 60,
-    subtasks: [
-      { id: 101, title: "Define database schema", completed: true },
-      { id: 102, title: "Create ERD diagram", completed: true },
-      { id: 103, title: "Document table relationships", completed: false },
-      { id: 104, title: "Add sample data", completed: false },
-      { id: 105, title: "Review proposal with team", completed: false },
-    ]
-  },
-  {
-    id: 2,
-    title: "Research paper literature review",
-    description: "Review 5 papers on machine learning algorithms",
-    dueDate: "2024-03-15",
-    priority: "Medium",
-    status: "Not Started",
-    labels: ["CS-508", "UAlbany", "Research"],
-    progress: 0,
-    subtasks: []
-  },
-  {
-    id: 3,
-    title: "Weekly team meeting notes",
-    description: "Prepare notes for the upcoming team meeting",
-    dueDate: "2024-03-08",
-    priority: "Low",
-    status: "Completed",
-    labels: ["Personal", "Meeting"],
-    progress: 100,
-    subtasks: [
-      { id: 301, title: "Draft agenda", completed: true },
-      { id: 302, title: "Share agenda with team", completed: true },
-      { id: 303, title: "Take minutes during meeting", completed: true },
-    ]
-  },
-  {
-    id: 4,
-    title: "Update project timeline",
-    description: "Adjust timeline based on new requirements",
-    dueDate: "2024-03-09",
-    priority: "Medium",
-    status: "In Progress",
-    labels: ["CS-508", "Planning"],
-    progress: 40,
-    subtasks: [
-      { id: 401, title: "Review current timeline", completed: true },
-      { id: 402, title: "Identify affected milestones", completed: false },
-      { id: 403, title: "Update Gantt chart", completed: false },
-    ]
-  },
-  {
-    id: 5,
-    title: "Prepare presentation slides",
-    description: "Create slides for the midterm presentation",
-    dueDate: "2024-03-20",
-    priority: "High",
-    status: "Not Started",
-    labels: ["CS-508", "Presentation"],
-    progress: 0,
-    subtasks: []
-  },
-];
-
-const categories = [
-  { id: 1, name: "All Tasks", count: 25 },
-  { id: 2, name: "Today", count: 5 },
-  { id: 3, name: "Upcoming", count: 10 },
-  { id: 4, name: "Completed", count: 8 },
-  { id: 5, name: "CS-508", count: 12 },
-  { id: 6, name: "UAlbany", count: 8 },
-  { id: 7, name: "Personal", count: 5 },
-  { id: 8, name: "Shared", count: 3 },
-];
+import { taskService } from "@/lib/api/tasks";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { adaptTaskFromApi, adaptTaskToApi } from "@/lib/utils/taskUtils";
 
 // Helper component for empty state
 const ClipboardIcon = ({ size = 24 }) => (
@@ -136,11 +55,21 @@ const ClipboardIcon = ({ size = 24 }) => (
   </svg>
 );
 
+const categories = [
+  { id: 1, name: "All Tasks", count: 0 }, // We'll update this count dynamically
+  { id: 2, name: "Today", count: 0 },
+  { id: 3, name: "Upcoming", count: 0 },
+  { id: 4, name: "Completed", count: 0 },
+  { id: 5, name: "CS-508", count: 0 },
+  { id: 6, name: "UAlbany", count: 0 },
+  { id: 7, name: "Personal", count: 0 },
+  { id: 8, name: "Shared", count: 0 },
+];
+
 export default function Tasks() {
   const { currentUser } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState(categories[0]);
-  const [tasks, setTasks] = useState(initialTasks);
-  const [filteredTasks, setFilteredTasks] = useState(initialTasks);
+  const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [openTaskDetail, setOpenTaskDetail] = useState(false);
   const [newSubtask, setNewSubtask] = useState("");
@@ -161,6 +90,139 @@ export default function Tasks() {
     subtasks: [] as { id: number; title: string; completed: boolean }[]
   });
   const [newLabel, setNewLabel] = useState("");
+  const [updatedCategories, setUpdatedCategories] = useState(categories);
+  
+  const queryClient = useQueryClient();
+  
+  // Fetch tasks using React Query
+  const { data: tasks = [], isLoading, error } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => {
+      const response = await taskService.getAllTasks();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data ? response.data : [];
+    }
+  });
+
+  // Add task mutation
+  const addTaskMutation = useMutation({
+    mutationFn: async (taskData: any) => {
+      const response = await taskService.createTask({
+        title: taskData.title,
+        description: taskData.description || "",
+        due_date: taskData.dueDate,
+        priority: taskData.priority,
+        status: taskData.status,
+      });
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success("Task added successfully");
+      setAddTaskOpen(false);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to add task: ${error.message}`);
+    }
+  });
+
+  // Update task mutation
+  const updateTaskMutation = useMutation({
+    mutationFn: async ({ taskId, updatedData }: { taskId: number, updatedData: any }) => {
+      const response = await taskService.updateTask(taskId, updatedData);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success("Task updated successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update task: ${error.message}`);
+    }
+  });
+
+  // Delete task mutation
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId: number) => {
+      const response = await taskService.deleteTask(taskId);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return taskId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success("Task deleted successfully");
+      setOpenTaskDetail(false);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete task: ${error.message}`);
+    }
+  });
+
+  // Complete task mutation
+  const completeTaskMutation = useMutation({
+    mutationFn: async (taskId: number) => {
+      const response = await taskService.completeTask(taskId);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success("Task marked as completed");
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to complete task: ${error.message}`);
+    }
+  });
+
+  // Update categories count based on tasks
+  useEffect(() => {
+    if (!isLoading && tasks.length > 0) {
+      const today = new Date().toISOString().split('T')[0];
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+
+      const updatedCats = categories.map(category => {
+        let count = 0;
+        
+        if (category.name === "All Tasks") {
+          count = tasks.length;
+        } else if (category.name === "Today") {
+          count = tasks.filter(task => {
+            const taskDate = new Date(task.due_date).toISOString().split('T')[0];
+            return taskDate === today;
+          }).length;
+        } else if (category.name === "Upcoming") {
+          count = tasks.filter(task => {
+            const taskDate = new Date(task.due_date);
+            return taskDate > new Date() && taskDate <= nextWeek;
+          }).length;
+        } else if (category.name === "Completed") {
+          count = tasks.filter(task => task.status === "Completed").length;
+        } else {
+          // Filter by label name
+          count = tasks.filter(task => 
+            task.labels && task.labels.includes(category.name)
+          ).length;
+        }
+        
+        return { ...category, count };
+      });
+      
+      setUpdatedCategories(updatedCats);
+    }
+  }, [tasks, isLoading]);
 
   // Apply all filters whenever filter parameters change
   useEffect(() => {
@@ -169,6 +231,11 @@ export default function Tasks() {
 
   // Apply all filters (category, search, priority, status)
   const applyFilters = () => {
+    if (isLoading || !tasks || tasks.length === 0) {
+      setFilteredTasks([]);
+      return;
+    }
+    
     let filtered = [...tasks];
     
     // Apply category filter
@@ -176,7 +243,7 @@ export default function Tasks() {
       if (selectedCategory.id === 2) { // Today
         const today = new Date().toISOString().split('T')[0];
         filtered = filtered.filter(task => {
-          const taskDate = new Date(task.dueDate).toISOString().split('T')[0];
+          const taskDate = new Date(task.due_date).toISOString().split('T')[0];
           return taskDate === today;
         });
       } else if (selectedCategory.id === 3) { // Upcoming
@@ -185,14 +252,14 @@ export default function Tasks() {
         nextWeek.setDate(today.getDate() + 7);
         
         filtered = filtered.filter(task => {
-          const taskDate = new Date(task.dueDate);
+          const taskDate = new Date(task.due_date);
           return taskDate > today && taskDate <= nextWeek;
         });
       } else if (selectedCategory.id === 4) { // Completed
         filtered = filtered.filter(task => task.status === "Completed");
       } else { // Filter by category name (label)
         filtered = filtered.filter(task => 
-          task.labels.includes(selectedCategory.name)
+          task.labels && task.labels.includes(selectedCategory.name)
         );
       }
     }
@@ -202,8 +269,8 @@ export default function Tasks() {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(task => 
         task.title.toLowerCase().includes(query) || 
-        task.description.toLowerCase().includes(query) ||
-        task.labels.some(label => label.toLowerCase().includes(query))
+        (task.description && task.description.toLowerCase().includes(query)) ||
+        (task.labels && task.labels.some((label: string) => label.toLowerCase().includes(query)))
       );
     }
 
@@ -234,99 +301,112 @@ export default function Tasks() {
   };
 
   const toggleSubtaskCompletion = (subtaskId: number) => {
+    if (!selectedTask || !selectedTask.subtasks) return;
+    
     // Create a deep copy of the selected task to modify
-    const updatedTask = JSON.parse(JSON.stringify(selectedTask));
+    const updatedTask = { ...selectedTask };
+    const updatedSubtasks = [...updatedTask.subtasks];
     
     // Find the subtask and toggle its completion status
-    const subtask = updatedTask.subtasks.find((st: any) => st.id === subtaskId);
-    if (subtask) {
-      subtask.completed = !subtask.completed;
+    const subtaskIndex = updatedSubtasks.findIndex(st => st.id === subtaskId);
+    if (subtaskIndex !== -1) {
+      updatedSubtasks[subtaskIndex] = {
+        ...updatedSubtasks[subtaskIndex],
+        completed: !updatedSubtasks[subtaskIndex].completed
+      };
       
       // Recalculate progress based on completed subtasks
-      if (updatedTask.subtasks.length > 0) {
-        const completedCount = updatedTask.subtasks.filter((st: any) => st.completed).length;
-        updatedTask.progress = Math.round((completedCount / updatedTask.subtasks.length) * 100);
-      }
+      const completedCount = updatedSubtasks.filter(st => st.completed).length;
+      const progress = Math.round((completedCount / updatedSubtasks.length) * 100);
       
-      // Update selectedTask
-      setSelectedTask(updatedTask);
+      // Update the task with new subtasks and progress
+      updateTaskMutation.mutate({
+        taskId: selectedTask.task_id,
+        updatedData: {
+          subtasks: updatedSubtasks,
+          progress
+        }
+      });
       
-      // Also update the task in the tasks array
-      const updatedTasks = tasks.map(task => 
-        task.id === updatedTask.id ? updatedTask : task
-      );
-      setTasks(updatedTasks);
-      
-      // Show success message
-      toast.success(`Subtask ${subtask.completed ? 'completed' : 'marked as incomplete'}`);
+      // Update local state
+      setSelectedTask({
+        ...updatedTask,
+        subtasks: updatedSubtasks,
+        progress
+      });
     }
   };
 
   const addSubtask = () => {
-    if (!newSubtask.trim()) {
+    if (!newSubtask.trim() || !selectedTask) {
       toast.error("Subtask title cannot be empty");
       return;
     }
     
     // Create a deep copy of the selected task
-    const updatedTask = JSON.parse(JSON.stringify(selectedTask));
+    const updatedTask = { ...selectedTask };
+    const updatedSubtasks = updatedTask.subtasks ? [...updatedTask.subtasks] : [];
     
     // Generate a unique ID for the new subtask
     const newSubtaskId = Date.now();
     
     // Add the new subtask
-    updatedTask.subtasks.push({
+    updatedSubtasks.push({
       id: newSubtaskId,
       title: newSubtask,
       completed: false
     });
     
     // Recalculate progress
-    if (updatedTask.subtasks.length > 0) {
-      const completedCount = updatedTask.subtasks.filter((st: any) => st.completed).length;
-      updatedTask.progress = Math.round((completedCount / updatedTask.subtasks.length) * 100);
-    }
+    const progress = updatedSubtasks.length > 0
+      ? Math.round((updatedSubtasks.filter(st => st.completed).length / updatedSubtasks.length) * 100)
+      : 0;
     
-    // Update state
-    setSelectedTask(updatedTask);
+    // Update the task
+    updateTaskMutation.mutate({
+      taskId: selectedTask.task_id,
+      updatedData: {
+        subtasks: updatedSubtasks
+      }
+    });
+    
+    // Update local state
+    setSelectedTask({
+      ...updatedTask,
+      subtasks: updatedSubtasks,
+      progress
+    });
     setNewSubtask("");
-    
-    // Update the task in the tasks array
-    const updatedTasks = tasks.map(task => 
-      task.id === updatedTask.id ? updatedTask : task
-    );
-    setTasks(updatedTasks);
-    
-    // Show success message
-    toast.success("Subtask added successfully");
   };
 
   const deleteSubtask = (subtaskId: number) => {
+    if (!selectedTask || !selectedTask.subtasks) return;
+    
     // Create a deep copy of the selected task
-    const updatedTask = JSON.parse(JSON.stringify(selectedTask));
+    const updatedTask = { ...selectedTask };
     
     // Filter out the subtask to delete
-    updatedTask.subtasks = updatedTask.subtasks.filter((st: any) => st.id !== subtaskId);
+    const updatedSubtasks = updatedTask.subtasks.filter(st => st.id !== subtaskId);
     
     // Recalculate progress
-    if (updatedTask.subtasks.length > 0) {
-      const completedCount = updatedTask.subtasks.filter((st: any) => st.completed).length;
-      updatedTask.progress = Math.round((completedCount / updatedTask.subtasks.length) * 100);
-    } else {
-      updatedTask.progress = 0;
-    }
+    const progress = updatedSubtasks.length > 0
+      ? Math.round((updatedSubtasks.filter(st => st.completed).length / updatedSubtasks.length) * 100)
+      : 0;
     
-    // Update state
-    setSelectedTask(updatedTask);
+    // Update the task
+    updateTaskMutation.mutate({
+      taskId: selectedTask.task_id,
+      updatedData: {
+        subtasks: updatedSubtasks
+      }
+    });
     
-    // Update the task in the tasks array
-    const updatedTasks = tasks.map(task => 
-      task.id === updatedTask.id ? updatedTask : task
-    );
-    setTasks(updatedTasks);
-    
-    // Show success message
-    toast.success("Subtask deleted");
+    // Update local state
+    setSelectedTask({
+      ...updatedTask,
+      subtasks: updatedSubtasks,
+      progress
+    });
   };
 
   const handleAddTask = () => {
@@ -340,21 +420,10 @@ export default function Tasks() {
       return;
     }
 
-    // Generate a new task ID
-    const newId = Math.max(...tasks.map(task => task.id), 0) + 1;
+    // Add the task using the mutation
+    addTaskMutation.mutate(newTask);
     
-    // Create the new task
-    const taskToAdd = {
-      ...newTask,
-      id: newId,
-      progress: 0
-    };
-
-    // Add to tasks list
-    const updatedTasks = [taskToAdd, ...tasks];
-    setTasks(updatedTasks);
-    
-    // Reset form and close dialog
+    // Reset form
     setNewTask({
       title: "",
       description: "",
@@ -365,37 +434,29 @@ export default function Tasks() {
       progress: 0,
       subtasks: []
     });
-    setAddTaskOpen(false);
-    
-    toast.success("Task added successfully");
   };
 
   const handleDeleteTask = (taskId: number) => {
-    // Filter out the task to delete
-    const updatedTasks = tasks.filter(task => task.id !== taskId);
-    setTasks(updatedTasks);
-    
-    // Close dialog if open
-    setOpenTaskDetail(false);
-    
-    toast.success("Task deleted successfully");
+    deleteTaskMutation.mutate(taskId);
   };
 
   const handleUpdateTaskStatus = (taskId: number, status: string) => {
-    // Update task status
-    const updatedTasks = tasks.map(task => 
-      task.id === taskId 
-        ? { ...task, status } 
-        : task
-    );
-    setTasks(updatedTasks);
-    
-    // If selected task is open, update it too
-    if (selectedTask && selectedTask.id === taskId) {
-      setSelectedTask({ ...selectedTask, status });
+    if (status === "Completed") {
+      completeTaskMutation.mutate(taskId);
+    } else {
+      updateTaskMutation.mutate({
+        taskId,
+        updatedData: { status }
+      });
     }
     
-    toast.success(`Task marked as ${status}`);
+    // If selected task is open, update it too
+    if (selectedTask && selectedTask.task_id === taskId) {
+      setSelectedTask({
+        ...selectedTask,
+        status
+      });
+    }
   };
 
   const handleAddLabel = () => {
@@ -403,18 +464,23 @@ export default function Tasks() {
     
     if (selectedTask) {
       // Add label to selected task
-      const updatedTask = { ...selectedTask };
-      if (!updatedTask.labels.includes(newLabel)) {
-        updatedTask.labels.push(newLabel);
+      const updatedLabels = selectedTask.labels ? [...selectedTask.labels] : [];
+      if (!updatedLabels.includes(newLabel)) {
+        updatedLabels.push(newLabel);
         
-        // Update state
-        setSelectedTask(updatedTask);
+        // Update the task
+        updateTaskMutation.mutate({
+          taskId: selectedTask.task_id,
+          updatedData: {
+            labels: updatedLabels
+          }
+        });
         
-        // Update in tasks
-        const updatedTasks = tasks.map(task => 
-          task.id === updatedTask.id ? updatedTask : task
-        );
-        setTasks(updatedTasks);
+        // Update local state
+        setSelectedTask({
+          ...selectedTask,
+          labels: updatedLabels
+        });
       }
     } else if (newTask.title) {
       // Add label to new task being created
@@ -430,26 +496,24 @@ export default function Tasks() {
   };
 
   const removeLabel = (taskId: number, labelToRemove: string) => {
-    // Remove label from task
-    const updatedTasks = tasks.map(task => {
-      if (task.id === taskId) {
-        return {
-          ...task,
-          labels: task.labels.filter(label => label !== labelToRemove)
-        };
+    if (!selectedTask) return;
+    
+    // Filter out the label to remove
+    const updatedLabels = selectedTask.labels.filter(label => label !== labelToRemove);
+    
+    // Update the task
+    updateTaskMutation.mutate({
+      taskId,
+      updatedData: {
+        labels: updatedLabels
       }
-      return task;
     });
     
-    setTasks(updatedTasks);
-    
-    // If selected task is open, update it too
-    if (selectedTask && selectedTask.id === taskId) {
-      setSelectedTask({
-        ...selectedTask,
-        labels: selectedTask.labels.filter((label: string) => label !== labelToRemove)
-      });
-    }
+    // Update local state
+    setSelectedTask({
+      ...selectedTask,
+      labels: updatedLabels
+    });
   };
 
   // Reset all filters
@@ -460,6 +524,38 @@ export default function Tasks() {
     });
     setSearchQuery("");
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+          <p className="text-muted-foreground">Loading tasks...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
+        <div className="flex flex-col items-center text-center max-w-md">
+          <div className="bg-destructive/10 p-4 rounded-full mb-4">
+            <X className="h-10 w-10 text-destructive" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Failed to load tasks</h2>
+          <p className="text-muted-foreground mb-4">
+            {error instanceof Error ? error.message : "An unexpected error occurred"}
+          </p>
+          <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}>
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -483,7 +579,7 @@ export default function Tasks() {
               <div className="font-medium">Categories</div>
               <ScrollArea className="h-[calc(100vh-14rem)]">
                 <div className="space-y-1 pr-3">
-                  {categories.map((category) => (
+                  {updatedCategories.map((category) => (
                     <Button
                       key={category.id}
                       variant={selectedCategory.id === category.id ? "default" : "ghost"}
@@ -585,7 +681,7 @@ export default function Tasks() {
               {filteredTasks.length > 0 ? (
                 filteredTasks.map((task) => (
                   <Card
-                    key={task.id}
+                    key={task.task_id}
                     className="cursor-pointer hover:shadow-md transition-shadow smooth-transition"
                     onClick={() => handleTaskClick(task)}
                   >
@@ -604,10 +700,10 @@ export default function Tasks() {
                           <div>
                             <h3 className="font-medium line-clamp-1">{task.title}</h3>
                             <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                              {task.description}
+                              {task.description || "No description"}
                             </p>
                             <div className="flex flex-wrap gap-2 mt-3">
-                              {task.labels.map((label: string) => (
+                              {task.labels && task.labels.map((label: string) => (
                                 <Badge key={label} variant="outline" className="bg-accent/40">
                                   {label}
                                 </Badge>
@@ -646,7 +742,7 @@ export default function Tasks() {
                           </Badge>
                           <div className="text-sm text-muted-foreground mt-auto flex items-center">
                             <CalendarDays size={14} className="mr-1" />
-                            <span>{new Date(task.dueDate).toLocaleDateString()}</span>
+                            <span>{new Date(task.due_date).toLocaleDateString()}</span>
                           </div>
                         </div>
                       </div>
@@ -707,7 +803,7 @@ export default function Tasks() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
                           className="text-destructive"
-                          onClick={() => handleDeleteTask(selectedTask.id)}
+                          onClick={() => handleDeleteTask(selectedTask.task_id)}
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
                           <span>Delete task</span>
@@ -736,7 +832,7 @@ export default function Tasks() {
                       } else {
                         newStatus = "Not Started";
                       }
-                      handleUpdateTaskStatus(selectedTask.id, newStatus);
+                      handleUpdateTaskStatus(selectedTask.task_id, newStatus);
                     }}
                   >
                     {selectedTask.status}
@@ -769,7 +865,7 @@ export default function Tasks() {
                   <h4 className="text-sm font-medium mb-2">Due Date</h4>
                   <div className="flex items-center text-sm">
                     <CalendarDays size={16} className="mr-2 text-muted-foreground" />
-                    <span>{new Date(selectedTask.dueDate).toLocaleDateString(undefined, {
+                    <span>{new Date(selectedTask.due_date).toLocaleDateString(undefined, {
                       weekday: 'long',
                       month: 'long',
                       day: 'numeric',
@@ -799,14 +895,14 @@ export default function Tasks() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {selectedTask.labels.map((label: string) => (
+                    {selectedTask.labels && selectedTask.labels.map((label: string) => (
                       <Badge key={label} variant="outline" className="bg-accent/40 group">
                         {label}
                         <button 
                           className="ml-1 text-muted-foreground hover:text-foreground"
                           onClick={(e) => {
                             e.stopPropagation();
-                            removeLabel(selectedTask.id, label);
+                            removeLabel(selectedTask.task_id, label);
                           }}
                         >
                           <X size={12} />

@@ -6,6 +6,9 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
+// Import database initialization
+const { initializeDatabase } = require('./db/init');
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const taskRoutes = require('./routes/tasks');
@@ -21,6 +24,15 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Initialize database
+initializeDatabase()
+  .then(initialized => {
+    console.log(initialized ? 'Database initialized successfully' : 'Database initialization skipped');
+  })
+  .catch(err => {
+    console.error('Failed to initialize database:', err);
+  });
 
 // Database connection
 const db = new Client({
