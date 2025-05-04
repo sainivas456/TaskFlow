@@ -20,6 +20,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { taskService, Task } from "@/lib/api/tasks";
+import { labelService, Label } from "@/lib/api/labels";
 import { adaptTaskFromApi } from "@/lib/utils/taskUtils";
 import { FrontendTask } from "@/lib/utils/taskUtils";
 import { NewTaskDialog } from "@/components/task/NewTaskDialog";
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [progress, setProgress] = useState(0);
   const [taskFilter, setTaskFilter] = useState<string | null>(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const [labels, setLabels] = useState<Label[]>([]);
   const navigate = useNavigate();
   
   // Fetch tasks using React Query
@@ -40,6 +42,23 @@ export default function Dashboard() {
       return (response.data || []).map(adaptTaskFromApi);
     },
   });
+
+  // Fetch labels using React Query
+  const { data: labelsData, isLoading: isLabelsLoading } = useQuery({
+    queryKey: ["dashboard-labels"],
+    queryFn: async () => {
+      const response = await labelService.getAllLabels();
+      console.log("Fetched labels for dashboard:", response);
+      return response.data || [];
+    },
+  });
+
+  // Update labels state when labelsData changes
+  useEffect(() => {
+    if (labelsData) {
+      setLabels(labelsData);
+    }
+  }, [labelsData]);
 
   const tasks = tasksData || [];
   
@@ -142,11 +161,6 @@ export default function Dashboard() {
     
     return filteredTasks;
   };
-
-  // Extract unique labels from all tasks for filtering
-  const uniqueLabels = Array.from(
-    new Set(tasks.flatMap(task => task.labels || []))
-  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -322,13 +336,20 @@ export default function Dashboard() {
                       <DropdownMenuItem onClick={() => setTaskFilter("Low Priority")}>
                         Low Priority
                       </DropdownMenuItem>
-                      {uniqueLabels.length > 0 && <DropdownMenuSeparator />}
-                      {uniqueLabels.map((label) => (
+                      
+                      {labels.length > 0 && <DropdownMenuSeparator />}
+                      {labels.map((label) => (
                         <DropdownMenuItem 
-                          key={String(label)} 
-                          onClick={() => setTaskFilter(`${String(label)} Label`)}
+                          key={`label-${label.label_id}`} 
+                          onClick={() => setTaskFilter(`${label.name} Label`)}
                         >
-                          {String(label)} Label
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: label.color }}
+                            ></div>
+                            <span>{label.name} Label</span>
+                          </div>
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>
@@ -426,6 +447,15 @@ export default function Dashboard() {
 }
 
 function TaskCard({ task, onClick }: { task: FrontendTask, onClick: () => void }) {
+  // Query for labels to get their colors
+  const { data: labelsData } = useQuery({
+    queryKey: ["task-card-labels"],
+    queryFn: async () => {
+      const response = await labelService.getAllLabels();
+      return response.data || [];
+    },
+  });
+
   return (
     <Card className="mb-4 overflow-hidden hover:shadow-md transition-shadow smooth-transition cursor-pointer" onClick={onClick}>
       <CardContent className="p-0">
@@ -453,11 +483,24 @@ function TaskCard({ task, onClick }: { task: FrontendTask, onClick: () => void }
         
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex flex-wrap gap-2">
-            {task.labels && task.labels.map((label) => (
-              <Badge key={String(label)} variant="outline" className="bg-accent/40">
-                {String(label)}
-              </Badge>
-            ))}
+            {task.labels && task.labels.map((label) => {
+              // Find matching label to get its color
+              const labelObj = labelsData?.find(l => l.name === String(label));
+              
+              return (
+                <Badge 
+                  key={String(label)} 
+                  variant="outline" 
+                  className="bg-accent/40"
+                  style={labelObj ? {
+                    borderColor: labelObj.color,
+                    borderWidth: '1px'
+                  } : {}}
+                >
+                  {String(label)}
+                </Badge>
+              );
+            })}
           </div>
           
           <div className="flex items-center space-x-4">

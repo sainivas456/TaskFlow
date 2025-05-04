@@ -1,508 +1,379 @@
 
 import { useState, useEffect } from "react";
-import { Check, Edit, Plus, Tags, Trash2, X } from "lucide-react";
+import { Plus, Tag, Edit, Trash2, Search, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { Label as HtmlLabel } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { labelService, Label } from "@/lib/api/labels";
 
-// Mock data
-const initialLabelsData = [
-  { id: 1, name: "CS-508", count: 12, color: "#3B82F6" },
-  { id: 2, name: "UAlbany", count: 8, color: "#10B981" },
-  { id: 3, name: "Personal", count: 5, color: "#6366F1" },
-  { id: 4, name: "Meeting", count: 3, color: "#F59E0B" },
-  { id: 5, name: "Research", count: 6, color: "#EC4899" },
-  { id: 6, name: "Presentation", count: 2, color: "#8B5CF6" },
-  { id: 7, name: "Planning", count: 4, color: "#EF4444" },
-  { id: 8, name: "data base", count: 7, color: "#14B8A6" },
-];
-
-const initialTasks = [
-  {
-    id: 1,
-    title: "Data base project proposal - submission",
-    description: "Complete the database schema and submit proposal",
-    dueDate: "2024-03-10",
-    priority: "High",
-    status: "In Progress",
-    labels: ["CS-508", "UAlbany", "data base"],
-    progress: 60,
-  },
-  {
-    id: 2,
-    title: "Research paper literature review",
-    description: "Review 5 papers on machine learning algorithms",
-    dueDate: "2024-03-15",
-    priority: "Medium",
-    status: "Not Started",
-    labels: ["CS-508", "UAlbany", "Research"],
-    progress: 0,
-  },
-  {
-    id: 3,
-    title: "Weekly team meeting notes",
-    description: "Prepare notes for the upcoming team meeting",
-    dueDate: "2024-03-08",
-    priority: "Low",
-    status: "Completed",
-    labels: ["Personal", "Meeting"],
-    progress: 100,
-  },
-  {
-    id: 4,
-    title: "Update project timeline",
-    description: "Adjust timeline based on new requirements",
-    dueDate: "2024-03-09",
-    priority: "Medium",
-    status: "In Progress",
-    labels: ["CS-508", "Planning"],
-    progress: 40,
-  },
-  {
-    id: 5,
-    title: "Prepare presentation slides",
-    description: "Create slides for the midterm presentation",
-    dueDate: "2024-03-20",
-    priority: "High",
-    status: "Not Started",
-    labels: ["CS-508", "Presentation"],
-    progress: 0,
-  },
+// Color options for label creation/editing
+const colorOptions = [
+  "#ef4444", // red
+  "#f97316", // orange
+  "#f59e0b", // amber
+  "#84cc16", // lime
+  "#10b981", // emerald
+  "#06b6d4", // cyan
+  "#3b82f6", // blue
+  "#8b5cf6", // violet
+  "#d946ef", // fuchsia
+  "#6b7280", // gray
 ];
 
 export default function Labels() {
-  const [labelsData, setLabelsData] = useState(initialLabelsData);
-  const [tasks, setTasks] = useState(initialTasks);
-  const [selectedLabel, setSelectedLabel] = useState<any>(null);
-  const [editingLabel, setEditingLabel] = useState<any>(null);
-  const [createLabelOpen, setCreateLabelOpen] = useState(false);
-  const [newLabelName, setNewLabelName] = useState("");
-  const [newLabelColor, setNewLabelColor] = useState("#3B82F6");
-  const [tasksWithLabel, setTasksWithLabel] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [currentLabel, setCurrentLabel] = useState<Label | null>(null);
+  const [newLabel, setNewLabel] = useState({
+    name: "",
+    color: colorOptions[0],
+    description: ""
+  });
   
-  // Update tasks with selected label when the label changes
-  useEffect(() => {
-    if (selectedLabel) {
-      const filtered = tasks.filter((task) => 
-        task.labels.includes(selectedLabel.name)
-      );
-      setTasksWithLabel(filtered);
+  // Query for fetching labels
+  const { 
+    data: labels, 
+    isLoading, 
+    error, 
+    refetch 
+  } = useQuery({
+    queryKey: ["labels"],
+    queryFn: async () => {
+      const response = await labelService.getAllLabels();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data || [];
+    }
+  });
+  
+  // Filtered labels based on search query
+  const filteredLabels = labels?.filter(label => 
+    label.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (label.description && label.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  ) || [];
+  
+  // Create a new label
+  const handleCreateLabel = async () => {
+    if (!newLabel.name.trim()) {
+      toast.error("Label name is required");
+      return;
+    }
+    
+    try {
+      const response = await labelService.createLabel({
+        name: newLabel.name,
+        color: newLabel.color,
+        description: newLabel.description
+      });
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      toast.success("Label created successfully");
+      refetch();
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (err: any) {
+      toast.error(`Failed to create label: ${err.message}`);
+    }
+  };
+  
+  // Update an existing label
+  const handleUpdateLabel = async () => {
+    if (!currentLabel || !newLabel.name.trim()) {
+      toast.error("Label name is required");
+      return;
+    }
+    
+    try {
+      const response = await labelService.updateLabel(currentLabel.label_id, {
+        name: newLabel.name,
+        color: newLabel.color,
+        description: newLabel.description
+      });
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      toast.success("Label updated successfully");
+      refetch();
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (err: any) {
+      toast.error(`Failed to update label: ${err.message}`);
+    }
+  };
+  
+  // Delete a label
+  const handleDeleteLabel = async () => {
+    if (!currentLabel) return;
+    
+    try {
+      const response = await labelService.deleteLabel(currentLabel.label_id);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      toast.success("Label deleted successfully");
+      refetch();
+      setIsDeleteDialogOpen(false);
+      resetForm();
+    } catch (err: any) {
+      toast.error(`Failed to delete label: ${err.message}`);
+    }
+  };
+  
+  // Open the create/edit dialog
+  const openLabelDialog = (label?: Label) => {
+    if (label) {
+      // Edit mode
+      setCurrentLabel(label);
+      setNewLabel({
+        name: label.name,
+        color: label.color,
+        description: label.description || ""
+      });
     } else {
-      setTasksWithLabel([]);
+      // Create mode
+      setCurrentLabel(null);
+      resetForm();
     }
-  }, [selectedLabel, tasks]);
-
-  const handleCreateLabel = () => {
-    if (!newLabelName.trim()) {
-      toast.error("Label name cannot be empty");
-      return;
-    }
-    
-    // Check if label name already exists
-    if (labelsData.some(label => label.name.toLowerCase() === newLabelName.toLowerCase())) {
-      toast.error("Label name already exists");
-      return;
-    }
-    
-    // Create new label
-    const newLabel = {
-      id: Math.max(...labelsData.map(l => l.id), 0) + 1,
-      name: newLabelName.trim(),
-      color: newLabelColor,
-      count: 0
-    };
-    
-    setLabelsData([...labelsData, newLabel]);
-    setCreateLabelOpen(false);
-    setNewLabelName("");
-    
-    toast.success(`Label "${newLabelName}" created successfully`);
-    
-    // Select the newly created label
-    setSelectedLabel(newLabel);
+    setIsDialogOpen(true);
   };
-
-  const handleSaveEdit = () => {
-    if (!editingLabel.name.trim()) {
-      toast.error("Label name cannot be empty");
-      return;
-    }
-    
-    // Check if new name already exists (excluding the current label)
-    if (labelsData.some(label => 
-      label.id !== editingLabel.id && 
-      label.name.toLowerCase() === editingLabel.name.toLowerCase()
-    )) {
-      toast.error("Label name already exists");
-      return;
-    }
-    
-    // Update label
-    const updatedLabels = labelsData.map(label => 
-      label.id === editingLabel.id ? editingLabel : label
-    );
-    
-    setLabelsData(updatedLabels);
-    
-    // If this was the selected label, update it too
-    if (selectedLabel && selectedLabel.id === editingLabel.id) {
-      setSelectedLabel(editingLabel);
-    }
-    
-    setEditingLabel(null);
-    toast.success(`Label renamed to "${editingLabel.name}"`);
-    
-    // Update tasks with this label
-    const oldLabelName = labelsData.find(l => l.id === editingLabel.id)?.name;
-    if (oldLabelName && oldLabelName !== editingLabel.name) {
-      const updatedTasks = tasks.map(task => ({
-        ...task,
-        labels: task.labels.map((label: string) => 
-          label === oldLabelName ? editingLabel.name : label
-        )
-      }));
-      setTasks(updatedTasks);
+  
+  // Open the delete confirmation dialog
+  const openDeleteDialog = (label: Label) => {
+    setCurrentLabel(label);
+    setIsDeleteDialogOpen(true);
+  };
+  
+  // Reset the form state
+  const resetForm = () => {
+    setNewLabel({
+      name: "",
+      color: colorOptions[0],
+      description: ""
+    });
+    setCurrentLabel(null);
+  };
+  
+  // Handle form submission
+  const handleSubmit = () => {
+    if (currentLabel) {
+      handleUpdateLabel();
+    } else {
+      handleCreateLabel();
     }
   };
-
-  const handleDeleteLabel = (labelId: number) => {
-    // Find the label to delete
-    const labelToDelete = labelsData.find(label => label.id === labelId);
-    if (!labelToDelete) return;
-    
-    // Remove label
-    const updatedLabels = labelsData.filter(label => label.id !== labelId);
-    setLabelsData(updatedLabels);
-    
-    // Update tasks by removing this label
-    const updatedTasks = tasks.map(task => ({
-      ...task,
-      labels: task.labels.filter(label => label !== labelToDelete.name)
-    }));
-    setTasks(updatedTasks);
-    
-    // If this was the selected label, clear selection
-    if (selectedLabel && selectedLabel.id === labelId) {
-      setSelectedLabel(null);
-    }
-    
-    toast.success(`Label "${labelToDelete.name}" deleted`);
-  };
-
-  const handleAddTask = () => {
-    toast.info("Redirecting to Tasks page to add a new task");
-    // This would typically navigate to the task creation form
-  };
-
+  
   return (
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Labels</h1>
           <p className="text-muted-foreground">
-            Organize and categorize your tasks with labels
+            Create and manage labels to categorize your tasks
           </p>
         </div>
-        <Dialog open={createLabelOpen} onOpenChange={setCreateLabelOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus size={16} />
-              Create Label
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Create New Label</DialogTitle>
-              <DialogDescription>
-                Create a new label to categorize your tasks
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label htmlFor="name" className="text-sm font-medium">
-                  Label Name
-                </label>
-                <Input
-                  id="name"
-                  placeholder="Enter label name"
-                  value={newLabelName}
-                  onChange={(e) => setNewLabelName(e.target.value)}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Label Color</label>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    "#3B82F6", // Blue
-                    "#10B981", // Green
-                    "#F59E0B", // Amber
-                    "#EF4444", // Red
-                    "#EC4899", // Pink
-                    "#8B5CF6", // Purple
-                    "#6366F1", // Indigo
-                    "#14B8A6", // Teal
-                  ].map((color) => (
-                    <button
-                      key={color}
-                      className={cn(
-                        "h-8 w-8 rounded-full cursor-pointer transition-transform hover:scale-110",
-                        "ring-offset-2 ring-offset-background",
-                        newLabelColor === color ? "ring-2" : ""
-                      )}
-                      style={{ 
-                        backgroundColor: color,
-                        boxShadow: newLabelColor === color ? `0 0 0 2px ${color}` : 'none'
-                      }}
-                      onClick={() => setNewLabelColor(color)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setCreateLabelOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateLabel}>Create Label</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button className="gap-2" onClick={() => openLabelDialog()}>
+          <Plus size={16} />
+          New Label
+        </Button>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        <Card className="md:col-span-4 animate-slide-in-bottom" style={{ animationDelay: "0ms" }}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-medium">All Labels</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[calc(100vh-13rem)] pr-4">
-              <div className="space-y-2">
-                {labelsData.map((label) => (
-                  <div
-                    key={label.id}
-                    className={cn(
-                      "flex items-center justify-between p-3 rounded-md cursor-pointer transition-colors",
-                      selectedLabel?.id === label.id
-                        ? "bg-accent"
-                        : "hover:bg-accent/50"
-                    )}
-                    onClick={() => {
-                      setSelectedLabel(label);
-                      setEditingLabel(null);
-                    }}
-                  >
-                    {editingLabel?.id === label.id ? (
-                      <div className="flex items-center gap-2 w-full">
-                        <div
-                          className="h-4 w-4 rounded-full"
-                          style={{ backgroundColor: editingLabel.color }}
-                        />
-                        <Input
-                          value={editingLabel.name}
-                          onChange={(e) => 
-                            setEditingLabel({ ...editingLabel, name: e.target.value })
-                          }
-                          className="h-8"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              handleSaveEdit();
-                            } else if (e.key === 'Escape') {
-                              setEditingLabel(null);
-                            }
-                          }}
-                        />
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSaveEdit();
-                            }}
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingLabel(null);
-                            }}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="h-4 w-4 rounded-full"
-                            style={{ backgroundColor: label.color }}
-                          />
-                          <span className="font-medium">{label.name}</span>
-                          <Badge variant="outline" className="ml-2">
-                            {label.count}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 opacity-50 hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingLabel({...label});
-                            }}
-                          >
-                            <Edit className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 opacity-50 hover:opacity-100 text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteLabel(label.id);
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </>
-                    )}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="relative flex-1 max-w-md">
+          <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
+          <Input
+            placeholder="Search labels..."
+            className="pl-10 w-full bg-muted/50 border-none focus-visible:ring-primary/20"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        
+        {searchQuery && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setSearchQuery("")} 
+            className="gap-1"
+          >
+            <X size={14} />
+            Clear
+          </Button>
+        )}
+      </div>
+      
+      {isLoading ? (
+        <div className="flex items-center justify-center h-[calc(100vh-14rem)]">
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-12">
+          <div className="text-destructive mb-2">Failed to load labels</div>
+          <Button onClick={() => refetch()}>Try again</Button>
+        </div>
+      ) : filteredLabels.length === 0 ? (
+        <div className="text-center py-12">
+          {searchQuery ? (
+            <div className="text-muted-foreground">
+              No labels match your search
+            </div>
+          ) : (
+            <div className="max-w-sm mx-auto">
+              <Tag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">No labels yet</h3>
+              <p className="text-muted-foreground mb-6">
+                Create labels to help organize and filter your tasks more efficiently.
+              </p>
+              <Button onClick={() => openLabelDialog()}>Create your first label</Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <ScrollArea className="h-[calc(100vh-14rem)]">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredLabels.map(label => (
+              <Card key={label.label_id} className="overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="flex items-center p-4">
+                    <div 
+                      className="h-4 w-4 rounded-full mr-3"
+                      style={{ backgroundColor: label.color }}
+                    ></div>
+                    <div className="flex-1">
+                      <h3 className="font-medium">{label.name}</h3>
+                      {label.description && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {label.description}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center">
+                      <Button variant="ghost" size="icon" onClick={() => openLabelDialog(label)}>
+                        <Edit size={16} />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => openDeleteDialog(label)}>
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
                   </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </ScrollArea>
+      )}
+      
+      {/* Create/Edit Label Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{currentLabel ? "Edit Label" : "Create Label"}</DialogTitle>
+            <DialogDescription>
+              {currentLabel 
+                ? "Update the details of your label" 
+                : "Create a new label to categorize your tasks"}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="grid gap-2">
+              <HtmlLabel htmlFor="name">Name</HtmlLabel>
+              <Input 
+                id="name"
+                placeholder="Enter label name" 
+                value={newLabel.name}
+                onChange={(e) => setNewLabel({...newLabel, name: e.target.value})}
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <HtmlLabel>Color</HtmlLabel>
+              <div className="flex flex-wrap gap-2">
+                {colorOptions.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`h-8 w-8 rounded-full transition-all ${
+                      newLabel.color === color 
+                        ? 'ring-2 ring-primary ring-offset-2' 
+                        : 'hover:scale-110'
+                    }`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setNewLabel({...newLabel, color})}
+                  />
                 ))}
               </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-        
-        <Card className="md:col-span-8 animate-slide-in-bottom" style={{ animationDelay: "100ms" }}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-medium">
-              {selectedLabel ? (
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-4 w-4 rounded-full"
-                    style={{ backgroundColor: selectedLabel.color }}
-                  />
-                  <span>{selectedLabel.name}</span>
-                  <Badge variant="outline" className="ml-1">
-                    {tasksWithLabel.length} tasks
-                  </Badge>
-                </div>
-              ) : (
-                "Select a label to view tasks"
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedLabel ? (
-              <ScrollArea className="h-[calc(100vh-13rem)] pr-4">
-                {tasksWithLabel.length > 0 ? (
-                  <div className="space-y-4">
-                    {tasksWithLabel.map((task) => (
-                      <Card key={task.id} className="overflow-hidden hover:bg-accent/5 transition-colors cursor-pointer">
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-medium mb-1">{task.title}</h3>
-                              <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                                {task.description}
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {task.labels
-                                  .filter((label: string) => label !== selectedLabel.name)
-                                  .map((label: string) => {
-                                    const labelData = labelsData.find(l => l.name === label);
-                                    return (
-                                      <Badge
-                                        key={label}
-                                        variant="outline"
-                                        className="bg-accent/40"
-                                      >
-                                        {label}
-                                      </Badge>
-                                    );
-                                  })}
-                              </div>
-                            </div>
-                            <Badge
-                              variant={
-                                task.status === "Completed"
-                                  ? "default"
-                                  : task.status === "In Progress"
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                            >
-                              {task.status}
-                            </Badge>
-                          </div>
-                          
-                          {task.progress > 0 && task.progress < 100 && (
-                            <div className="mt-4">
-                              <Progress value={task.progress} className="h-1" />
-                              <div className="flex justify-end mt-1">
-                                <span className="text-xs text-muted-foreground">
-                                  {task.progress}%
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <Tags className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                    <p className="text-muted-foreground mb-2">No tasks with this label</p>
-                    <Button variant="outline" size="sm" className="mt-2 gap-1" onClick={handleAddTask}>
-                      <Plus size={14} />
-                      Add Task with this Label
-                    </Button>
-                  </div>
-                )}
-              </ScrollArea>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Tags className="h-16 w-16 text-muted-foreground/30 mb-4" />
-                <p className="text-lg font-medium mb-2">No Label Selected</p>
-                <p className="text-muted-foreground mb-6 max-w-md">
-                  Select a label from the list on the left to view associated tasks,
-                  or create a new label to organize your tasks
-                </p>
-                <Button className="gap-2" onClick={() => setCreateLabelOpen(true)}>
-                  <Plus size={16} />
-                  Create Label
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </div>
+            
+            <div className="grid gap-2">
+              <HtmlLabel htmlFor="description">Description (Optional)</HtmlLabel>
+              <Input 
+                id="description"
+                placeholder="Enter label description" 
+                value={newLabel.description}
+                onChange={(e) => setNewLabel({...newLabel, description: e.target.value})}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit}>
+              {currentLabel ? "Update Label" : "Create Label"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Label</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the label "{currentLabel?.name}"? 
+              This will remove the label from all tasks it is currently assigned to.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter className="sm:justify-start">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteLabel}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

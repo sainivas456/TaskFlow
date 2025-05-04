@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Calendar,
@@ -13,6 +13,7 @@ import {
   Settings,
   Tags,
   Users,
+  Loader2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,8 +28,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { NewTaskDialog } from "./task/NewTaskDialog";
 import { useLocation as useRouterLocation } from "react-router-dom";
+import { labelService } from "@/lib/api/labels";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
-const sidebarItems = [
+// Base sidebar items (excluding labels which will be loaded dynamically)
+const baseSidebarItems = [
   { name: "Dashboard", icon: Home, path: "/" },
   { name: "Tasks", icon: Layers, path: "/tasks" },
   { name: "Calendar", icon: Calendar, path: "/calendar" },
@@ -45,6 +50,32 @@ export function AppSidebar() {
   const [expanded, setExpanded] = useState(true);
   const [newTaskDialogOpen, setNewTaskDialogOpen] = useState(false);
   const routerLocation = useRouterLocation();
+  const [isLoading, setIsLoading] = useState(true);
+  const [labels, setLabels] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch labels when the component mounts
+    const fetchLabels = async () => {
+      try {
+        setIsLoading(true);
+        const response = await labelService.getAllLabels();
+        
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        
+        console.log("Sidebar labels fetched successfully:", response.data);
+        setLabels(response.data || []);
+      } catch (err: any) {
+        console.error("Failed to fetch labels for sidebar:", err);
+        // Don't show toast for this as it's a background load and not critical for UX
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchLabels();
+  }, []);
 
   const handleTaskAdded = () => {
     // If we're on the tasks page, navigate there to refresh the content
@@ -91,7 +122,7 @@ export function AppSidebar() {
               </Button>
 
               <div className="space-y-1">
-                {sidebarItems.map((item) => (
+                {baseSidebarItems.map((item) => (
                   <Link
                     key={item.name}
                     to={item.path}
@@ -107,6 +138,42 @@ export function AppSidebar() {
                   </Link>
                 ))}
               </div>
+
+              {expanded && labels.length > 0 && (
+                <div className="mt-6">
+                  <div className="px-3 py-1.5 text-sm font-medium text-muted-foreground">
+                    Labels
+                  </div>
+                  <div className="space-y-1 mt-1">
+                    {labels.map((label) => (
+                      <Link
+                        key={`label-${label.label_id}`}
+                        to={`/tasks?label=${label.label_id}`}
+                        className="flex items-center py-2 px-3 text-sm rounded-md text-foreground/70 hover:text-primary hover:bg-accent/50"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigate('/tasks', { state: { selectedLabelId: label.label_id } });
+                        }}
+                      >
+                        <div 
+                          className="h-3 w-3 rounded-full mr-3"
+                          style={{ backgroundColor: label.color }}
+                        ></div>
+                        <span>{label.name}</span>
+                        <Badge variant="outline" className="ml-auto text-xs">
+                          {/* We can add count here in future */}
+                        </Badge>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {expanded && isLoading && (
+                <div className="flex justify-center my-4">
+                  <Loader2 size={18} className="animate-spin text-muted-foreground" />
+                </div>
+              )}
             </div>
           </ScrollArea>
         </SidebarContent>
