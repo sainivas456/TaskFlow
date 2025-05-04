@@ -28,9 +28,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { NewTaskDialog } from "./task/NewTaskDialog";
 import { useLocation as useRouterLocation } from "react-router-dom";
-import { labelService } from "@/lib/api/labels";
+import { labelService, Label } from "@/lib/api/labels";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 
 // Base sidebar items (excluding labels which will be loaded dynamically)
 const baseSidebarItems = [
@@ -50,14 +51,15 @@ export function AppSidebar() {
   const [expanded, setExpanded] = useState(true);
   const [newTaskDialogOpen, setNewTaskDialogOpen] = useState(false);
   const routerLocation = useRouterLocation();
-  const [isLoading, setIsLoading] = useState(true);
-  const [labels, setLabels] = useState<any[]>([]);
 
-  useEffect(() => {
-    // Fetch labels when the component mounts
-    const fetchLabels = async () => {
+  // Use react-query to fetch labels
+  const { 
+    data: labels = [], 
+    isLoading: isLabelsLoading 
+  } = useQuery({
+    queryKey: ["sidebar-labels"],
+    queryFn: async () => {
       try {
-        setIsLoading(true);
         const response = await labelService.getAllLabels();
         
         if (response.error) {
@@ -65,17 +67,13 @@ export function AppSidebar() {
         }
         
         console.log("Sidebar labels fetched successfully:", response.data);
-        setLabels(response.data || []);
-      } catch (err: any) {
+        return response.data || [];
+      } catch (err) {
         console.error("Failed to fetch labels for sidebar:", err);
-        // Don't show toast for this as it's a background load and not critical for UX
-      } finally {
-        setIsLoading(false);
+        return [];
       }
-    };
-
-    fetchLabels();
-  }, []);
+    }
+  });
 
   const handleTaskAdded = () => {
     // If we're on the tasks page, navigate there to refresh the content
@@ -160,16 +158,13 @@ export function AppSidebar() {
                           style={{ backgroundColor: label.color }}
                         ></div>
                         <span>{label.name}</span>
-                        <Badge variant="outline" className="ml-auto text-xs">
-                          {/* We can add count here in future */}
-                        </Badge>
                       </Link>
                     ))}
                   </div>
                 </div>
               )}
 
-              {expanded && isLoading && (
+              {expanded && isLabelsLoading && (
                 <div className="flex justify-center my-4">
                   <Loader2 size={18} className="animate-spin text-muted-foreground" />
                 </div>

@@ -15,7 +15,7 @@ import { Label as HtmlLabel } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { labelService, Label } from "@/lib/api/labels";
 
 // Color options for label creation/editing
@@ -33,6 +33,7 @@ const colorOptions = [
 ];
 
 export default function Labels() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -45,26 +46,28 @@ export default function Labels() {
   
   // Query for fetching labels
   const { 
-    data: labels, 
+    data: labels = [], 
     isLoading, 
     error, 
     refetch 
   } = useQuery({
     queryKey: ["labels"],
     queryFn: async () => {
+      console.log("Fetching labels in Labels component");
       const response = await labelService.getAllLabels();
       if (response.error) {
         throw new Error(response.error);
       }
+      console.log("Labels fetched:", response.data);
       return response.data || [];
     }
   });
   
   // Filtered labels based on search query
-  const filteredLabels = labels?.filter(label => 
+  const filteredLabels = labels.filter(label => 
     label.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (label.description && label.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  ) || [];
+  );
   
   // Create a new label
   const handleCreateLabel = async () => {
@@ -85,7 +88,7 @@ export default function Labels() {
       }
       
       toast.success("Label created successfully");
-      refetch();
+      queryClient.invalidateQueries({ queryKey: ["labels"] });
       setIsDialogOpen(false);
       resetForm();
     } catch (err: any) {
@@ -112,7 +115,7 @@ export default function Labels() {
       }
       
       toast.success("Label updated successfully");
-      refetch();
+      queryClient.invalidateQueries({ queryKey: ["labels"] });
       setIsDialogOpen(false);
       resetForm();
     } catch (err: any) {
@@ -132,7 +135,7 @@ export default function Labels() {
       }
       
       toast.success("Label deleted successfully");
-      refetch();
+      queryClient.invalidateQueries({ queryKey: ["labels"] });
       setIsDeleteDialogOpen(false);
       resetForm();
     } catch (err: any) {
