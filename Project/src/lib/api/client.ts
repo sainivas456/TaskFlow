@@ -34,6 +34,27 @@ export async function apiRequest<T = any>(
       headers,
     });
     
+    // Handle unauthorized errors specifically
+    if (response.status === 401) {
+      // Clear auth data and redirect to login
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("user_data");
+      
+      // Only show toast if we were previously logged in
+      if (token) {
+        toast.error("Session expired. Please log in again.");
+        // Redirect to login page if not already there
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
+      }
+      
+      return { 
+        error: "Unauthorized", 
+        status: response.status 
+      };
+    }
+    
     // Handle JSON responses
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {

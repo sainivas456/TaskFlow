@@ -1,3 +1,4 @@
+
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
@@ -53,8 +54,8 @@ router.post('/register', [
     
     jwt.sign(
       payload,
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN },
+      process.env.JWT_SECRET || 'secret',
+      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' },
       (err, token) => {
         if (err) throw err;
         res.json({
@@ -115,8 +116,8 @@ router.post('/login', [
     
     jwt.sign(
       payload,
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN },
+      process.env.JWT_SECRET || 'secret',
+      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' },
       (err, token) => {
         if (err) throw err;
         

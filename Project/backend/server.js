@@ -25,22 +25,13 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Initialize database
-initializeDatabase()
-  .then(initialized => {
-    console.log(initialized ? 'Database initialized successfully' : 'Database initialization skipped');
-  })
-  .catch(err => {
-    console.error('Failed to initialize database:', err);
-  });
-
 // Database connection
 const db = new Client({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'taskflow',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres',
 });
 
 // Connect to database
@@ -48,12 +39,21 @@ db.connect()
   .then(() => {
     console.log('Connected to PostgreSQL database');
     console.log('Database configuration:');
-    console.log(`- Host: ${process.env.DB_HOST}`);
-    console.log(`- Database: ${process.env.DB_NAME}`);
-    console.log(`- User: ${process.env.DB_USER}`);
-    console.log(`- Port: ${process.env.DB_PORT}`);
+    console.log(`- Host: ${process.env.DB_HOST || 'localhost'}`);
+    console.log(`- Database: ${process.env.DB_NAME || 'taskflow'}`);
+    console.log(`- User: ${process.env.DB_USER || 'postgres'}`);
+    console.log(`- Port: ${process.env.DB_PORT || 5432}`);
+    
+    // Initialize database after connecting
+    return initializeDatabase(db);
   })
-  .catch(err => console.error('Database connection error:', err));
+  .then(initialized => {
+    console.log(initialized ? 'Database initialized successfully' : 'Database initialization skipped');
+  })
+  .catch(err => {
+    console.error('Database connection or initialization error:', err);
+    process.exit(1);
+  });
 
 // Make db available in the request
 app.use((req, res, next) => {

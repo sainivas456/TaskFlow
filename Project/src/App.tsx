@@ -24,8 +24,8 @@ function App() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="ui-theme">
       <QueryProvider>
-        <AuthProvider>
-          <Router>
+        <Router>
+          <AuthProvider>
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
@@ -49,9 +49,9 @@ function App() {
               {/* 404 route */}
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </Router>
-          <Toaster position="bottom-right" />
-        </AuthProvider>
+            <Toaster position="bottom-right" />
+          </AuthProvider>
+        </Router>
       </QueryProvider>
     </ThemeProvider>
   );
