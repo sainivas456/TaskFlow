@@ -5,11 +5,11 @@ export interface TaskType {
   description?: string;
   dueDate: Date;
   priority: "High" | "Medium" | "Low";
-  status: "Not Started" | "In Progress" | "Completed";
+  status: "Not Started" | "In Progress" | "Completed" | "Overdue"; // Added "Overdue" to match FrontendTask
   labels: string[];
-  progress: number; // Added this field to match FrontendTask
-  source?: string; // Changed to allow any string to match FrontendTask
-  subtasks?: { id: number; title: string; completed: boolean }[]; // Added to match FrontendTask
+  progress: number;
+  source?: string;
+  subtasks?: { id: number; title: string; completed: boolean }[];
 }
 
 export interface NewTaskInput {
@@ -18,8 +18,8 @@ export interface NewTaskInput {
   priority: "High" | "Medium" | "Low";
   status: "Not Started" | "In Progress" | "Completed";
   labels: string[];
-  progress?: number; // Added to match FrontendTask
-  source?: string; // Changed to match FrontendTask
+  progress?: number;
+  source?: string;
 }
 
 export interface CalendarSyncConfig {

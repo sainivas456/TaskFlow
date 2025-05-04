@@ -34,8 +34,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { taskService } from "@/lib/api/tasks";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { adaptTaskFromApi, adaptTaskToApi } from "@/lib/utils/taskUtils";
 
 // Helper component for empty state
 const ClipboardIcon = ({ size = 24 }) => (
@@ -70,6 +68,7 @@ export default function Tasks() {
   const { currentUser } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState(categories[0]);
   const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [openTaskDetail, setOpenTaskDetail] = useState(false);
   const [newSubtask, setNewSubtask] = useState("");
@@ -91,100 +90,170 @@ export default function Tasks() {
   });
   const [newLabel, setNewLabel] = useState("");
   const [updatedCategories, setUpdatedCategories] = useState(categories);
-  
-  const queryClient = useQueryClient();
-  
-  // Fetch tasks using React Query
-  const { data: tasks = [], isLoading, error } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: async () => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch tasks
+  const fetchTasks = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      console.log("Fetching all tasks in Tasks component");
       const response = await taskService.getAllTasks();
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data ? response.data : [];
+      
+      console.log("Tasks fetched successfully:", response.data);
+      setTasks(response.data || []);
+    } catch (err: any) {
+      console.error("Failed to fetch tasks:", err);
+      setError(err.message || "Failed to fetch tasks");
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
 
-  // Add task mutation
-  const addTaskMutation = useMutation({
-    mutationFn: async (taskData: any) => {
-      const response = await taskService.createTask({
-        title: taskData.title,
-        description: taskData.description || "",
-        due_date: taskData.dueDate,
-        priority: taskData.priority,
-        status: taskData.status,
-      });
+  // Fetch tasks on component mount
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  // Add task
+  const addTask = async () => {
+    if (!newTask.title.trim()) {
+      toast.error("Task title is required");
+      return;
+    }
+
+    if (!newTask.dueDate) {
+      toast.error("Due date is required");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      const taskData = {
+        title: newTask.title,
+        description: newTask.description,
+        due_date: newTask.dueDate,
+        priority: mapPriorityToDb(newTask.priority), // Convert string priority to number
+        status: newTask.status === "Not Started" ? "Pending" : newTask.status,
+        labels: newTask.labels
+      };
+      
+      console.log("Creating new task:", taskData);
+      const response = await taskService.createTask(taskData);
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      
+      console.log("Task created successfully:", response.data);
+      setTasks(prev => [...prev, response.data]);
       toast.success("Task added successfully");
+      
+      // Reset form
+      setNewTask({
+        title: "",
+        description: "",
+        dueDate: "",
+        priority: "Medium",
+        status: "Not Started",
+        labels: [],
+        progress: 0,
+        subtasks: []
+      });
+      
       setAddTaskOpen(false);
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to add task: ${error.message}`);
+    } catch (err: any) {
+      console.error("Failed to add task:", err);
+      toast.error(`Failed to add task: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
 
-  // Update task mutation
-  const updateTaskMutation = useMutation({
-    mutationFn: async ({ taskId, updatedData }: { taskId: number, updatedData: any }) => {
+  // Update task
+  const updateTask = async (taskId: number, updatedData: any) => {
+    try {
+      setIsLoading(true);
+      console.log(`Updating task ${taskId}:`, updatedData);
       const response = await taskService.updateTask(taskId, updatedData);
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      
+      console.log("Task updated successfully:", response.data);
+      setTasks(prev => prev.map(task => task.task_id === taskId ? response.data : task));
+      
+      // Update selected task if open
+      if (selectedTask && selectedTask.task_id === taskId) {
+        setSelectedTask(response.data);
+      }
+      
       toast.success("Task updated successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update task: ${error.message}`);
+    } catch (err: any) {
+      console.error("Failed to update task:", err);
+      toast.error(`Failed to update task: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
 
-  // Delete task mutation
-  const deleteTaskMutation = useMutation({
-    mutationFn: async (taskId: number) => {
+  // Delete task
+  const deleteTask = async (taskId: number) => {
+    try {
+      setIsLoading(true);
+      console.log(`Deleting task ${taskId}`);
       const response = await taskService.deleteTask(taskId);
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return taskId;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast.success("Task deleted successfully");
+      
+      console.log("Task deleted successfully");
+      setTasks(prev => prev.filter(task => task.task_id !== taskId));
       setOpenTaskDetail(false);
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to delete task: ${error.message}`);
+      toast.success("Task deleted successfully");
+    } catch (err: any) {
+      console.error("Failed to delete task:", err);
+      toast.error(`Failed to delete task: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
 
-  // Complete task mutation
-  const completeTaskMutation = useMutation({
-    mutationFn: async (taskId: number) => {
+  // Complete task
+  const completeTask = async (taskId: number) => {
+    try {
+      setIsLoading(true);
+      console.log(`Marking task ${taskId} as completed`);
       const response = await taskService.completeTask(taskId);
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      
+      console.log("Task completed successfully:", response.data);
+      setTasks(prev => prev.map(task => task.task_id === taskId ? response.data : task));
+      
+      // Update selected task if open
+      if (selectedTask && selectedTask.task_id === taskId) {
+        setSelectedTask(response.data);
+      }
+      
       toast.success("Task marked as completed");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to complete task: ${error.message}`);
+    } catch (err: any) {
+      console.error("Failed to complete task:", err);
+      toast.error(`Failed to complete task: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
 
   // Update categories count based on tasks
   useEffect(() => {
@@ -320,12 +389,9 @@ export default function Tasks() {
       const progress = Math.round((completedCount / updatedSubtasks.length) * 100);
       
       // Update the task with new subtasks and progress
-      updateTaskMutation.mutate({
-        taskId: selectedTask.task_id,
-        updatedData: {
-          subtasks: updatedSubtasks,
-          progress
-        }
+      updateTask(selectedTask.task_id, {
+        subtasks: updatedSubtasks,
+        progress
       });
       
       // Update local state
@@ -363,11 +429,8 @@ export default function Tasks() {
       : 0;
     
     // Update the task
-    updateTaskMutation.mutate({
-      taskId: selectedTask.task_id,
-      updatedData: {
-        subtasks: updatedSubtasks
-      }
+    updateTask(selectedTask.task_id, {
+      subtasks: updatedSubtasks
     });
     
     // Update local state
@@ -394,11 +457,8 @@ export default function Tasks() {
       : 0;
     
     // Update the task
-    updateTaskMutation.mutate({
-      taskId: selectedTask.task_id,
-      updatedData: {
-        subtasks: updatedSubtasks
-      }
+    updateTask(selectedTask.task_id, {
+      subtasks: updatedSubtasks
     });
     
     // Update local state
@@ -409,53 +469,22 @@ export default function Tasks() {
     });
   };
 
+  // Function to handle adding task
   const handleAddTask = () => {
-    if (!newTask.title.trim()) {
-      toast.error("Task title is required");
-      return;
-    }
-
-    if (!newTask.dueDate) {
-      toast.error("Due date is required");
-      return;
-    }
-
-    // Add the task using the mutation
-    addTaskMutation.mutate(newTask);
-    
-    // Reset form
-    setNewTask({
-      title: "",
-      description: "",
-      dueDate: "",
-      priority: "Medium",
-      status: "Not Started",
-      labels: [],
-      progress: 0,
-      subtasks: []
-    });
+    addTask();
   };
 
+  // Function to handle deleting task
   const handleDeleteTask = (taskId: number) => {
-    deleteTaskMutation.mutate(taskId);
+    deleteTask(taskId);
   };
 
+  // Function to update task status
   const handleUpdateTaskStatus = (taskId: number, status: string) => {
     if (status === "Completed") {
-      completeTaskMutation.mutate(taskId);
+      completeTask(taskId);
     } else {
-      updateTaskMutation.mutate({
-        taskId,
-        updatedData: { status }
-      });
-    }
-    
-    // If selected task is open, update it too
-    if (selectedTask && selectedTask.task_id === taskId) {
-      setSelectedTask({
-        ...selectedTask,
-        status
-      });
+      updateTask(taskId, { status });
     }
   };
 
@@ -469,11 +498,8 @@ export default function Tasks() {
         updatedLabels.push(newLabel);
         
         // Update the task
-        updateTaskMutation.mutate({
-          taskId: selectedTask.task_id,
-          updatedData: {
-            labels: updatedLabels
-          }
+        updateTask(selectedTask.task_id, {
+          labels: updatedLabels
         });
         
         // Update local state
@@ -502,11 +528,8 @@ export default function Tasks() {
     const updatedLabels = selectedTask.labels.filter(label => label !== labelToRemove);
     
     // Update the task
-    updateTaskMutation.mutate({
-      taskId,
-      updatedData: {
-        labels: updatedLabels
-      }
+    updateTask(taskId, {
+      labels: updatedLabels
     });
     
     // Update local state
@@ -525,8 +548,18 @@ export default function Tasks() {
     setSearchQuery("");
   };
 
+  // Helper function to map priority from text to number value
+  const mapPriorityToDb = (priority: string): number => {
+    switch (priority) {
+      case "High": return 5;
+      case "Medium": return 3;
+      case "Low": return 1;
+      default: return 3; // Default to medium
+    }
+  };
+  
   // Loading state
-  if (isLoading) {
+  if (isLoading && tasks.length === 0) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
         <div className="flex flex-col items-center">
@@ -538,7 +571,7 @@ export default function Tasks() {
   }
 
   // Error state
-  if (error) {
+  if (error && tasks.length === 0) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
         <div className="flex flex-col items-center text-center max-w-md">
@@ -546,17 +579,15 @@ export default function Tasks() {
             <X className="h-10 w-10 text-destructive" />
           </div>
           <h2 className="text-xl font-semibold mb-2">Failed to load tasks</h2>
-          <p className="text-muted-foreground mb-4">
-            {error instanceof Error ? error.message : "An unexpected error occurred"}
-          </p>
-          <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}>
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <Button onClick={fetchTasks}>
             Try Again
           </Button>
         </div>
       </div>
     );
   }
-
+  
   return (
     <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -914,190 +945,87 @@ export default function Tasks() {
                 
                 <Separator />
                 
-                {/* Subtasks Section */}
                 <div>
-                  <h4 className="text-sm font-medium mb-3">Subtasks</h4>
-                  
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Input
-                      id="new-subtask-input"
-                      placeholder="Add a subtask"
-                      value={newSubtask}
-                      onChange={(e) => setNewSubtask(e.target.value)}
-                      className="text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          addSubtask();
-                        }
-                      }}
-                    />
-                    <Button size="sm" onClick={addSubtask}>Add</Button>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium">Subtasks</h4>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="new-subtask-input"
+                        placeholder="Add new subtask"
+                        value={newSubtask}
+                        onChange={(e) => setNewSubtask(e.target.value)}
+                        className="h-8 text-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            addSubtask();
+                          }
+                        }}
+                      />
+                      <Button size="sm" onClick={addSubtask}>Add</Button>
+                    </div>
                   </div>
                   
-                  {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
-                    <div className="space-y-2 mb-4">
-                      {selectedTask.subtasks.map((subtask: any) => (
-                        <div key={subtask.id} className="flex items-center justify-between gap-2 group">
-                          <div className="flex items-start gap-2 flex-1">
-                            <Checkbox 
-                              id={`subtask-${subtask.id}`} 
-                              checked={subtask.completed}
-                              onCheckedChange={() => toggleSubtaskCompletion(subtask.id)}
-                              className="mt-0.5"
-                            />
-                            <label 
-                              htmlFor={`subtask-${subtask.id}`}
-                              className={cn(
-                                "text-sm cursor-pointer", 
-                                subtask.completed && "line-through text-muted-foreground"
-                              )}
-                            >
-                              {subtask.title}
-                            </label>
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteSubtask(subtask.id);
-                            }}
+                  <div className="space-y-2">
+                    {selectedTask.subtasks && selectedTask.subtasks.length > 0 ? (
+                      selectedTask.subtasks.map((subtask: any) => (
+                        <div key={subtask.id} className="flex items-center gap-2">
+                          <Checkbox 
+                            id={`subtask-${subtask.id}`}
+                            checked={subtask.completed}
+                            onCheckedChange={() => toggleSubtaskCompletion(subtask.id)}
+                          />
+                          <label 
+                            htmlFor={`subtask-${subtask.id}`}
+                            className={cn(
+                              "text-sm flex-1",
+                              subtask.completed && "line-through text-muted-foreground"
+                            )}
                           >
-                            <Trash2 size={14} className="text-muted-foreground" />
+                            {subtask.title}
+                          </label>
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => deleteSubtask(subtask.id)}
+                          >
+                            <X size={14} />
                           </Button>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground mb-2">
-                      No subtasks yet. Add some subtasks to track your progress.
+                      ))
+                    ) : (
+                      <div className="text-sm text-muted-foreground text-center py-2">
+                        No subtasks yet. Add one above.
+                      </div>
+                    )}
+                  </div>
+                  
+                  {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
+                    <div className="mt-4">
+                      <Progress value={selectedTask.progress || 0} className="h-1" />
+                      <div className="flex justify-end mt-1">
+                        <span className="text-xs text-muted-foreground">{selectedTask.progress || 0}% complete</span>
+                      </div>
                     </div>
                   )}
                 </div>
+                
+                <Separator />
+                
+                <DialogFooter className="flex justify-end gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setOpenTaskDetail(false)}
+                  >
+                    Close
+                  </Button>
+                  <Button onClick={() => completeTask(selectedTask.task_id)}>
+                    Mark as Completed
+                  </Button>
+                </DialogFooter>
               </div>
-
-              <DialogFooter className="mt-6">
-                <Button variant="outline" onClick={() => setOpenTaskDetail(false)}>Close</Button>
-              </DialogFooter>
             </>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Task Dialog */}
-      <Dialog open={addTaskOpen} onOpenChange={setAddTaskOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add New Task</DialogTitle>
-            <DialogDescription>
-              Create a new task and add it to your list.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <label htmlFor="title" className="text-sm font-medium">Title</label>
-              <Input 
-                id="title"
-                placeholder="Task title"
-                value={newTask.title}
-                onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <label htmlFor="description" className="text-sm font-medium">Description</label>
-              <Textarea 
-                id="description"
-                placeholder="Task description (optional)"
-                value={newTask.description}
-                onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-                className="min-h-[80px]"
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <label htmlFor="dueDate" className="text-sm font-medium">Due Date</label>
-              <Input 
-                id="dueDate" 
-                type="date"
-                value={newTask.dueDate}
-                onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <label htmlFor="priority" className="text-sm font-medium">Priority</label>
-                <select 
-                  id="priority"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={newTask.priority}
-                  onChange={(e) => setNewTask({...newTask, priority: e.target.value})}
-                >
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
-                </select>
-              </div>
-              
-              <div className="grid gap-2">
-                <label htmlFor="status" className="text-sm font-medium">Status</label>
-                <select 
-                  id="status"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={newTask.status}
-                  onChange={(e) => setNewTask({...newTask, status: e.target.value})}
-                >
-                  <option value="Not Started">Not Started</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">Labels</label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {newTask.labels.map((label, index) => (
-                  <Badge key={index} variant="outline" className="bg-accent/40 group">
-                    {label}
-                    <button 
-                      className="ml-1 text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setNewTask({
-                          ...newTask,
-                          labels: newTask.labels.filter((_, i) => i !== index)
-                        });
-                      }}
-                    >
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-              <div className="flex items-center space-x-2">
-                <Input
-                  placeholder="Add new label"
-                  value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                  className="text-sm"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleAddLabel();
-                    }
-                  }}
-                />
-                <Button size="sm" onClick={handleAddLabel}>Add</Button>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddTaskOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddTask}>Create Task</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

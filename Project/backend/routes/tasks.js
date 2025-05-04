@@ -10,36 +10,39 @@ const { check, validationResult } = require('express-validator');
 router.get('/', auth, async (req, res) => {
   try {
     const db = req.db;
+    console.log("Fetching tasks for user:", req.user.id);
     
-    // Get tasks
+    // Get tasks - note the uppercase "Tasks" to match your schema
     const tasks = await db.query(
-      'SELECT * FROM tasks WHERE user_id = $1 ORDER BY due_date ASC',
+      'SELECT * FROM Tasks WHERE user_id = $1 ORDER BY due_date ASC',
       [req.user.id]
     );
     
+    console.log(`Found ${tasks.rows.length} tasks`);
+    
     // For each task, get its labels
     const tasksWithLabels = await Promise.all(tasks.rows.map(async (task) => {
-      // Get labels for this task
+      // Get labels for this task using correct case for tables
       const labelQuery = await db.query(
-        `SELECT l.name 
-         FROM labels l 
-         INNER JOIN task_labels tl ON l.label_id = tl.label_id 
+        `SELECT l.label_name as name 
+         FROM Labels l 
+         INNER JOIN Task_Labels tl ON l.label_id = tl.label_id 
          WHERE tl.task_id = $1`,
         [task.task_id]
       );
       
       const labels = labelQuery.rows.map(row => row.name);
       
-      // Get subtasks for this task
+      // Get subtasks for this task using correct case for Sub_Tasks
       const subtasksQuery = await db.query(
-        'SELECT * FROM subtasks WHERE task_id = $1',
+        'SELECT * FROM Sub_Tasks WHERE task_id = $1',
         [task.task_id]
       );
       
       const subtasks = subtasksQuery.rows.map(row => ({
-        id: row.subtask_id,
+        id: row.sub_task_id,
         title: row.title,
-        completed: row.completed
+        completed: row.status === 'Completed'
       }));
       
       // Calculate progress based on subtasks
@@ -63,8 +66,8 @@ router.get('/', auth, async (req, res) => {
     
     res.json(tasksWithLabels);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error fetching tasks:", err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -74,9 +77,10 @@ router.get('/', auth, async (req, res) => {
 router.get('/:id', auth, async (req, res) => {
   try {
     const db = req.db;
+    console.log(`Fetching task ${req.params.id} for user ${req.user.id}`);
     
     const task = await db.query(
-      'SELECT * FROM tasks WHERE task_id = $1 AND user_id = $2',
+      'SELECT * FROM Tasks WHERE task_id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
     );
     
@@ -86,9 +90,9 @@ router.get('/:id', auth, async (req, res) => {
     
     // Get labels for this task
     const labelQuery = await db.query(
-      `SELECT l.name 
-       FROM labels l 
-       INNER JOIN task_labels tl ON l.label_id = tl.label_id 
+      `SELECT l.label_name as name 
+       FROM Labels l 
+       INNER JOIN Task_Labels tl ON l.label_id = tl.label_id 
        WHERE tl.task_id = $1`,
       [req.params.id]
     );
@@ -97,14 +101,14 @@ router.get('/:id', auth, async (req, res) => {
     
     // Get subtasks
     const subtasksQuery = await db.query(
-      'SELECT * FROM subtasks WHERE task_id = $1',
+      'SELECT * FROM Sub_Tasks WHERE task_id = $1',
       [req.params.id]
     );
     
     const subtasks = subtasksQuery.rows.map(row => ({
-      id: row.subtask_id,
+      id: row.sub_task_id,
       title: row.title,
-      completed: row.completed
+      completed: row.status === 'Completed'
     }));
     
     // Calculate progress
@@ -125,8 +129,8 @@ router.get('/:id', auth, async (req, res) => {
       progress
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    console.error(`Error fetching task ${req.params.id}:`, err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -137,8 +141,8 @@ router.post('/', [
   auth,
   [
     check('title', 'Title is required').not().isEmpty(),
-    check('status', 'Status is required').isIn(['Not Started', 'In Progress', 'Completed']),
-    check('priority', 'Priority must be either Low, Medium, or High').isIn(['Low', 'Medium', 'High']),
+    check('status', 'Status is required').isIn(['Pending', 'In Progress', 'Completed', 'Overdue']),
+    check('priority', 'Priority must be between 1 and 5').isInt({ min: 1, max: 5 }),
   ]
 ], async (req, res) => {
   const errors = validationResult(req);
@@ -151,45 +155,49 @@ router.post('/', [
   
   try {
     const db = req.db;
+    console.log("Creating new task:", { title, priority, status });
     
     // Begin transaction
     await db.query('BEGIN');
     
-    // Create task
+    // Create task with correct table name case
     const newTask = await db.query(
-      'INSERT INTO tasks (user_id, title, description, due_date, priority, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *',
+      'INSERT INTO Tasks (user_id, title, description, due_date, priority, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *',
       [req.user.id, title, description, due_date, priority, status]
     );
     
     const taskId = newTask.rows[0].task_id;
+    console.log(`Created task with ID: ${taskId}`);
     
     // Add labels
     if (labels.length > 0) {
       for (const labelName of labels) {
         // Check if label exists for this user
         let labelQuery = await db.query(
-          'SELECT label_id FROM labels WHERE user_id = $1 AND name = $2',
+          'SELECT label_id FROM Labels WHERE user_id = $1 AND label_name = $2',
           [req.user.id, labelName]
         );
         
         let labelId;
         
         if (labelQuery.rows.length === 0) {
-          // Create new label
+          // Create new label with default color
           const newLabel = await db.query(
-            'INSERT INTO labels (user_id, name) VALUES ($1, $2) RETURNING label_id',
-            [req.user.id, labelName]
+            'INSERT INTO Labels (user_id, label_name, color_code) VALUES ($1, $2, $3) RETURNING label_id',
+            [req.user.id, labelName, '#3B82F6']  // Default blue color
           );
           labelId = newLabel.rows[0].label_id;
+          console.log(`Created new label: ${labelName} with ID ${labelId}`);
         } else {
           labelId = labelQuery.rows[0].label_id;
         }
         
         // Add to task_labels junction table
         await db.query(
-          'INSERT INTO task_labels (task_id, label_id) VALUES ($1, $2)',
+          'INSERT INTO Task_Labels (task_id, label_id) VALUES ($1, $2)',
           [taskId, labelId]
         );
+        console.log(`Added label ${labelName} to task ${taskId}`);
       }
     }
     
@@ -197,14 +205,16 @@ router.post('/', [
     if (subtasks.length > 0) {
       for (const subtask of subtasks) {
         await db.query(
-          'INSERT INTO subtasks (task_id, title, completed) VALUES ($1, $2, $3)',
-          [taskId, subtask.title, subtask.completed || false]
+          'INSERT INTO Sub_Tasks (task_id, title, status) VALUES ($1, $2, $3)',
+          [taskId, subtask.title, subtask.completed ? 'Completed' : 'Pending']
         );
+        console.log(`Added subtask "${subtask.title}" to task ${taskId}`);
       }
     }
     
     // Commit transaction
     await db.query('COMMIT');
+    console.log(`Transaction committed successfully for task ${taskId}`);
     
     // Return created task with labels and subtasks
     const result = {
@@ -219,8 +229,8 @@ router.post('/', [
     // Rollback on error
     await db.query('ROLLBACK');
     
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error creating task:", err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -240,10 +250,11 @@ router.put('/:id', auth, async (req, res) => {
   
   try {
     const db = req.db;
+    console.log(`Updating task ${req.params.id}:`, taskFields);
     
     // Check if task exists and belongs to user
     let task = await db.query(
-      'SELECT * FROM tasks WHERE task_id = $1 AND user_id = $2',
+      'SELECT * FROM Tasks WHERE task_id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
     );
     
@@ -261,43 +272,47 @@ router.put('/:id', auth, async (req, res) => {
       const values = fieldsToUpdate.map(field => taskFields[field]);
       
       await db.query(
-        `UPDATE tasks SET ${setQuery} WHERE task_id = $1 AND user_id = $2 RETURNING *`,
+        `UPDATE Tasks SET ${setQuery} WHERE task_id = $1 AND user_id = $2 RETURNING *`,
         [req.params.id, req.user.id, ...values]
       );
+      console.log(`Updated task fields for task ${req.params.id}`);
     }
     
     // Update labels if provided
     if (labels !== undefined) {
       // Remove existing task-label associations
-      await db.query('DELETE FROM task_labels WHERE task_id = $1', [req.params.id]);
+      await db.query('DELETE FROM Task_Labels WHERE task_id = $1', [req.params.id]);
+      console.log(`Removed existing labels for task ${req.params.id}`);
       
       // Add new labels
       if (labels.length > 0) {
         for (const labelName of labels) {
           // Check if label exists for this user
           let labelQuery = await db.query(
-            'SELECT label_id FROM labels WHERE user_id = $1 AND name = $2',
+            'SELECT label_id FROM Labels WHERE user_id = $1 AND label_name = $2',
             [req.user.id, labelName]
           );
           
           let labelId;
           
           if (labelQuery.rows.length === 0) {
-            // Create new label
+            // Create new label with default color
             const newLabel = await db.query(
-              'INSERT INTO labels (user_id, name) VALUES ($1, $2) RETURNING label_id',
-              [req.user.id, labelName]
+              'INSERT INTO Labels (user_id, label_name, color_code) VALUES ($1, $2, $3) RETURNING label_id',
+              [req.user.id, labelName, '#3B82F6']  // Default blue color
             );
             labelId = newLabel.rows[0].label_id;
+            console.log(`Created new label: ${labelName} with ID ${labelId}`);
           } else {
             labelId = labelQuery.rows[0].label_id;
           }
           
           // Add to task_labels junction table
           await db.query(
-            'INSERT INTO task_labels (task_id, label_id) VALUES ($1, $2)',
+            'INSERT INTO Task_Labels (task_id, label_id) VALUES ($1, $2)',
             [req.params.id, labelId]
           );
+          console.log(`Added label ${labelName} to task ${req.params.id}`);
         }
       }
     }
@@ -305,33 +320,36 @@ router.put('/:id', auth, async (req, res) => {
     // Update subtasks if provided
     if (subtasks !== undefined) {
       // Delete all existing subtasks
-      await db.query('DELETE FROM subtasks WHERE task_id = $1', [req.params.id]);
+      await db.query('DELETE FROM Sub_Tasks WHERE task_id = $1', [req.params.id]);
+      console.log(`Removed existing subtasks for task ${req.params.id}`);
       
       // Add new subtasks
       if (subtasks.length > 0) {
         for (const subtask of subtasks) {
           await db.query(
-            'INSERT INTO subtasks (task_id, title, completed) VALUES ($1, $2, $3)',
-            [req.params.id, subtask.title, subtask.completed || false]
+            'INSERT INTO Sub_Tasks (task_id, title, status) VALUES ($1, $2, $3)',
+            [req.params.id, subtask.title, subtask.completed ? 'Completed' : 'Pending']
           );
+          console.log(`Added subtask "${subtask.title}" to task ${req.params.id}`);
         }
       }
     }
     
     // Commit transaction
     await db.query('COMMIT');
+    console.log(`Transaction committed successfully for task update ${req.params.id}`);
     
     // Get updated task with labels and subtasks
     const updatedTask = await db.query(
-      'SELECT * FROM tasks WHERE task_id = $1',
+      'SELECT * FROM Tasks WHERE task_id = $1',
       [req.params.id]
     );
     
     // Get labels for this task
     const labelQuery = await db.query(
-      `SELECT l.name 
-       FROM labels l 
-       INNER JOIN task_labels tl ON l.label_id = tl.label_id 
+      `SELECT l.label_name as name 
+       FROM Labels l 
+       INNER JOIN Task_Labels tl ON l.label_id = tl.label_id 
        WHERE tl.task_id = $1`,
       [req.params.id]
     );
@@ -340,14 +358,14 @@ router.put('/:id', auth, async (req, res) => {
     
     // Get subtasks
     const subtasksQuery = await db.query(
-      'SELECT * FROM subtasks WHERE task_id = $1',
+      'SELECT * FROM Sub_Tasks WHERE task_id = $1',
       [req.params.id]
     );
     
     const updatedSubtasks = subtasksQuery.rows.map(row => ({
-      id: row.subtask_id,
+      id: row.sub_task_id,
       title: row.title,
-      completed: row.completed
+      completed: row.status === 'Completed'
     }));
     
     // Calculate progress
@@ -371,8 +389,8 @@ router.put('/:id', auth, async (req, res) => {
     // Rollback on error
     await db.query('ROLLBACK');
     
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    console.error(`Error updating task ${req.params.id}:`, err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -382,10 +400,11 @@ router.put('/:id', auth, async (req, res) => {
 router.delete('/:id', auth, async (req, res) => {
   try {
     const db = req.db;
+    console.log(`Deleting task ${req.params.id}`);
     
     // Check if task exists and belongs to user
     let task = await db.query(
-      'SELECT * FROM tasks WHERE task_id = $1 AND user_id = $2',
+      'SELECT * FROM Tasks WHERE task_id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
     );
     
@@ -395,14 +414,15 @@ router.delete('/:id', auth, async (req, res) => {
     
     // Delete task (cascade will delete subtasks and task_labels)
     await db.query(
-      'DELETE FROM tasks WHERE task_id = $1',
+      'DELETE FROM Tasks WHERE task_id = $1',
       [req.params.id]
     );
+    console.log(`Deleted task ${req.params.id}`);
     
     res.json({ message: 'Task deleted' });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    console.error(`Error deleting task ${req.params.id}:`, err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -412,10 +432,11 @@ router.delete('/:id', auth, async (req, res) => {
 router.put('/:id/complete', auth, async (req, res) => {
   try {
     const db = req.db;
+    console.log(`Marking task ${req.params.id} as completed`);
     
     // Check if task exists and belongs to user
     let task = await db.query(
-      'SELECT * FROM tasks WHERE task_id = $1 AND user_id = $2',
+      'SELECT * FROM Tasks WHERE task_id = $1 AND user_id = $2',
       [req.params.id, req.user.id]
     );
     
@@ -425,20 +446,21 @@ router.put('/:id/complete', auth, async (req, res) => {
     
     // Update task to completed
     const updatedTask = await db.query(
-      'UPDATE tasks SET status = $1, completed_at = NOW() WHERE task_id = $2 RETURNING *',
+      'UPDATE Tasks SET status = $1, completed_at = NOW() WHERE task_id = $2 RETURNING *',
       ['Completed', req.params.id]
     );
     
     // Mark all subtasks as completed
     await db.query(
-      'UPDATE subtasks SET completed = true WHERE task_id = $1',
-      [req.params.id]
+      'UPDATE Sub_Tasks SET status = $1 WHERE task_id = $2',
+      ['Completed', req.params.id]
     );
+    console.log(`Marked task ${req.params.id} and all its subtasks as completed`);
     
     res.json(updatedTask.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    console.error(`Error completing task ${req.params.id}:`, err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 

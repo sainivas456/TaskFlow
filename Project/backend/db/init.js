@@ -4,8 +4,9 @@ const path = require('path');
 const { Client } = require('pg');
 require('dotenv').config();
 
-async function initializeDatabase() {
-  const client = new Client({
+async function initializeDatabase(existingClient = null) {
+  // Use provided client or create a new one
+  const client = existingClient || new Client({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     database: process.env.DB_NAME,
@@ -14,8 +15,11 @@ async function initializeDatabase() {
   });
 
   try {
-    await client.connect();
-    console.log('Connected to database for initialization');
+    // Only connect if we're not using an existing client
+    if (!existingClient) {
+      await client.connect();
+      console.log('Connected to database for initialization');
+    }
 
     // Check if tables already exist
     const tableCheckQuery = `
@@ -35,6 +39,12 @@ async function initializeDatabase() {
     // If tables don't exist, read SQL file and create them
     console.log('No existing tables found. Creating database schema...');
     const sqlFilePath = path.join(__dirname, 'init.sql');
+    
+    if (!fs.existsSync(sqlFilePath)) {
+      console.error('SQL initialization file not found at:', sqlFilePath);
+      return false;
+    }
+    
     const sql = fs.readFileSync(sqlFilePath, 'utf8');
 
     // Execute SQL commands
@@ -46,8 +56,11 @@ async function initializeDatabase() {
     console.error('Error initializing database:', error);
     return false;
   } finally {
-    await client.end();
-    console.log('Database initialization connection closed');
+    // Only close if we created a new client
+    if (!existingClient && client) {
+      await client.end();
+      console.log('Database initialization connection closed');
+    }
   }
 }
 

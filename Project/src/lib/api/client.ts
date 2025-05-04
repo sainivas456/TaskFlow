@@ -1,6 +1,5 @@
 
 import { toast } from "sonner";
-import { queryClient } from "@/lib/query-client";
 
 // In production this would be an environment variable
 const API_BASE_URL = "http://localhost:5000/api"; 
@@ -9,6 +8,7 @@ export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   status: number;
+  rawError?: any;
 }
 
 export async function apiRequest<T = any>(
@@ -19,25 +19,31 @@ export async function apiRequest<T = any>(
   
   console.log(`API Request: ${options.method || 'GET'} ${url}`);
   
-  // Default headers
-  const headers = {
+  // Create a new headers object to avoid TypeScript issues
+  const headersObj: Record<string, string> = {
     "Content-Type": "application/json",
-    ...options.headers,
+    ...(options.headers as Record<string, string> || {})
   };
   
   // Add auth token if available
   const token = localStorage.getItem("auth_token");
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headersObj["Authorization"] = `Bearer ${token}`;
     console.log("Using auth token:", `Bearer ${token.substring(0, 10)}...`);
   } else {
     console.log("No auth token available");
   }
   
   try {
+    console.log("Sending request with options:", { 
+      method: options.method,
+      headers: { ...headersObj, Authorization: headersObj.Authorization ? "Bearer [REDACTED]" : undefined },
+      body: options.body ? "[BODY DATA]" : undefined 
+    });
+    
     const response = await fetch(url, {
       ...options,
-      headers,
+      headers: headersObj,
     });
     
     // Log response status
@@ -48,9 +54,6 @@ export async function apiRequest<T = any>(
       // Clear auth data and redirect to login
       localStorage.removeItem("auth_token");
       localStorage.removeItem("user_data");
-      
-      // Clear all query cache
-      queryClient.clear();
       
       // Only show toast if we were previously logged in
       if (token) {
@@ -71,6 +74,7 @@ export async function apiRequest<T = any>(
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       const data = await response.json();
+      console.log("Parsed JSON response:", data);
       
       if (!response.ok) {
         // Log the error for debugging
@@ -80,7 +84,8 @@ export async function apiRequest<T = any>(
         toast.error(data.message || "An error occurred");
         return { 
           error: data.message || "An error occurred", 
-          status: response.status 
+          status: response.status,
+          rawError: data
         };
       }
       
@@ -89,11 +94,13 @@ export async function apiRequest<T = any>(
     
     // Handle non-JSON responses
     if (!response.ok) {
-      console.error("Non-JSON Error Response:", response);
+      const errorText = await response.text();
+      console.error("Non-JSON Error Response:", response, errorText);
       toast.error("An error occurred");
       return { 
         error: "An error occurred", 
-        status: response.status 
+        status: response.status,
+        rawError: errorText
       };
     }
     
@@ -103,7 +110,8 @@ export async function apiRequest<T = any>(
     toast.error("Network error. Please try again later.");
     return { 
       error: "Network error", 
-      status: 0 
+      status: 0,
+      rawError: error
     };
   }
 }

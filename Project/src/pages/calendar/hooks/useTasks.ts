@@ -1,10 +1,8 @@
-
 import { useState, useEffect } from "react";
 import { TaskType, NewTaskInput, CalendarSyncConfig } from "../types";
 import { toast } from "sonner";
 import { taskService } from "@/lib/api/tasks";
 import { adaptTaskFromApi, adaptTaskToApi } from "@/lib/utils/taskUtils";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Initial sync configurations
 const initialSyncConfigs: CalendarSyncConfig[] = [
@@ -23,7 +21,7 @@ const mockGoogleEvents: TaskType[] = [
     priority: "Medium",
     status: "Not Started",
     labels: ["Conference", "Tech"],
-    progress: 0, // Added progress property
+    progress: 0,
     source: "google"
   },
   {
@@ -34,7 +32,7 @@ const mockGoogleEvents: TaskType[] = [
     priority: "Low",
     status: "Not Started",
     labels: ["Workshop", "Learning"],
-    progress: 0, // Added progress property
+    progress: 0,
     source: "google"
   }
 ];
@@ -48,7 +46,7 @@ const mockOutlookEvents: TaskType[] = [
     priority: "High",
     status: "Not Started",
     labels: ["Client", "Business"],
-    progress: 0, // Added progress property
+    progress: 0,
     source: "outlook"
   }
 ];
@@ -62,7 +60,7 @@ const mockAppleEvents: TaskType[] = [
     priority: "Medium",
     status: "Not Started",
     labels: ["Health", "Personal"],
-    progress: 0, // Added progress property
+    progress: 0,
     source: "apple"
   }
 ];
@@ -70,104 +68,159 @@ const mockAppleEvents: TaskType[] = [
 export function useTasks(selectedDate: Date | undefined) {
   const [tasksForDate, setTasksForDate] = useState<TaskType[]>([]);
   const [syncConfigs, setSyncConfigs] = useState<CalendarSyncConfig[]>(initialSyncConfigs);
+  const [tasks, setTasks] = useState<TaskType[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
-  const queryClient = useQueryClient();
-  
-  // Fetch tasks from API
-  const { data: tasks = [], isLoading, error } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: async () => {
+  // Function to fetch tasks
+  const fetchTasks = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      console.log("Fetching tasks in useTasks hook");
       const response = await taskService.getAllTasks();
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      // Convert API tasks to frontend format
-      return response.data ? response.data.map(adaptTaskFromApi) : [];
+      
+      // Use the adapted task data that maps from DB format to frontend format
+      const fetchedTasks = response.data ? response.data.map(adaptTaskFromApi) : [];
+      console.log("Fetched tasks:", fetchedTasks);
+      setTasks(fetchedTasks);
+    } catch (err: any) {
+      console.error("Error fetching tasks:", err);
+      setError(err.message || "Failed to fetch tasks");
+      toast.error("Failed to load tasks");
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
   
-  // Add task mutation
-  const addTaskMutation = useMutation({
-    mutationFn: async (newTaskData: {task: NewTaskInput, dueDate: Date}) => {
-      const { task, dueDate } = newTaskData;
+  // Fetch tasks on component mount
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+  
+  // Add task function
+  const addTask = async (newTask: NewTaskInput, dueDate: Date) => {
+    try {
+      setIsLoading(true);
+      
+      // Map frontend task to database format
       const apiTask = {
-        title: task.title,
-        description: task.description || "",
-        due_date: dueDate.toISOString(),
-        priority: task.priority || "Medium",
-        status: task.status || "Not Started",
-        labels: task.labels || []
+        title: newTask.title,
+        description: newTask.description || "",
+        due_date: dueDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+        priority: newTask.priority === "High" ? 5 : newTask.priority === "Medium" ? 3 : 1,
+        status: newTask.status === "Not Started" ? "Pending" : newTask.status,
+        labels: newTask.labels || []
       };
       
+      console.log("Creating new task with DB format:", apiTask);
       const response = await taskService.createTask(apiTask);
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return adaptTaskFromApi(response.data!);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      
+      const createdTask = adaptTaskFromApi(response.data!);
+      setTasks(prev => [...prev, createdTask]);
       toast.success("Task added successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to add task: ${error.message}`);
+    } catch (err: any) {
+      console.error("Failed to add task:", err);
+      toast.error(`Failed to add task: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
   
-  // Edit task mutation
-  const editTaskMutation = useMutation({
-    mutationFn: async ({taskId, updatedTask}: {taskId: number, updatedTask: Partial<TaskType>}) => {
+  // Edit task function
+  const editTask = async (taskId: number, updatedTask: Partial<TaskType>) => {
+    try {
+      setIsLoading(true);
+      
+      // Map frontend task to database format
       const apiTask = adaptTaskToApi(updatedTask as TaskType);
+      console.log("Updating task with DB format:", taskId, apiTask);
       const response = await taskService.updateTask(taskId, apiTask);
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return adaptTaskFromApi(response.data!);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      
+      const editedTask = adaptTaskFromApi(response.data!);
+      setTasks(prev => prev.map(task => task.id === taskId ? editedTask : task));
       toast.success("Task updated successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update task: ${error.message}`);
+    } catch (err: any) {
+      console.error("Failed to update task:", err);
+      toast.error(`Failed to update task: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
   
-  // Delete task mutation
-  const deleteTaskMutation = useMutation({
-    mutationFn: async (taskId: number) => {
+  // Delete task function
+  const deleteTask = async (taskId: number) => {
+    try {
+      const taskToDelete = tasks.find(task => task.id === taskId);
+      
+      if (taskToDelete?.source && taskToDelete.source !== "local") {
+        toast.error(`Cannot delete task from ${taskToDelete.source} calendar. Sync is read-only in this demo.`);
+        return;
+      }
+      
+      setIsLoading(true);
+      console.log("Deleting task:", taskId);
       const response = await taskService.deleteTask(taskId);
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return taskId;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      
+      setTasks(prev => prev.filter(task => task.id !== taskId));
       toast.success("Task deleted successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to delete task: ${error.message}`);
+    } catch (err: any) {
+      console.error("Failed to delete task:", err);
+      toast.error(`Failed to delete task: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
   
-  // Update task status mutation
-  const updateTaskStatusMutation = useMutation({
-    mutationFn: async ({taskId, status}: {taskId: number, status: TaskType["status"]}) => {
-      const response = await taskService.updateTask(taskId, { status });
+  // Update task status function
+  const updateTaskStatus = async (taskId: number, status: TaskType["status"]) => {
+    try {
+      const taskToUpdate = tasks.find(task => task.id === taskId);
+      
+      if (taskToUpdate?.source && taskToUpdate.source !== "local") {
+        toast.error(`Cannot update task from ${taskToUpdate.source} calendar. Sync is read-only in this demo.`);
+        return;
+      }
+      
+      setIsLoading(true);
+      console.log("Updating task status:", taskId, status);
+      
+      // Map frontend status to database status format
+      const dbStatus = status === "Not Started" ? "Pending" : status;
+      
+      const response = await taskService.updateTask(taskId, { status: dbStatus });
+      
       if (response.error) {
         throw new Error(response.error);
       }
-      return adaptTaskFromApi(response.data!);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      
+      const updatedTask = adaptTaskFromApi(response.data!);
+      setTasks(prev => prev.map(task => task.id === taskId ? updatedTask : task));
       toast.success("Task status updated successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update task status: ${error.message}`);
+    } catch (err: any) {
+      console.error("Failed to update task status:", err);
+      toast.error(`Failed to update task status: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
-  });
+  };
   
   // Update tasks for selected date
   useEffect(() => {
@@ -187,40 +240,6 @@ export function useTasks(selectedDate: Date | undefined) {
     
     setTasksForDate(filteredTasks);
   }, [selectedDate, tasks]);
-  
-  // Add a new task
-  const addTask = (newTask: NewTaskInput, dueDate: Date) => {
-    addTaskMutation.mutate({ task: newTask, dueDate });
-  };
-  
-  // Edit an existing task
-  const editTask = (taskId: number, updatedTask: Partial<TaskType>) => {
-    editTaskMutation.mutate({ taskId, updatedTask });
-  };
-  
-  // Delete a task
-  const deleteTask = (taskId: number) => {
-    const taskToDelete = tasks.find(task => task.id === taskId);
-    
-    if (taskToDelete?.source && taskToDelete.source !== "local") {
-      toast.error(`Cannot delete task from ${taskToDelete.source} calendar. Sync is read-only in this demo.`);
-      return;
-    }
-    
-    deleteTaskMutation.mutate(taskId);
-  };
-  
-  // Update task status
-  const updateTaskStatus = (taskId: number, status: TaskType["status"]) => {
-    const taskToUpdate = tasks.find(task => task.id === taskId);
-    
-    if (taskToUpdate?.source && taskToUpdate.source !== "local") {
-      toast.error(`Cannot update task from ${taskToUpdate.source} calendar. Sync is read-only in this demo.`);
-      return;
-    }
-    
-    updateTaskStatusMutation.mutate({ taskId, status });
-  };
   
   // Save sync configurations
   const saveSyncConfigs = (configs: CalendarSyncConfig[]) => {
@@ -264,9 +283,8 @@ export function useTasks(selectedDate: Date | undefined) {
           );
           setSyncConfigs(updatedConfigs);
           
-          // In a real implementation, we would send these to the backend
-          // For now, we'll just show them in the UI without persisting
-          queryClient.setQueryData(['tasks'], [...tasks.filter(task => task.source !== provider), ...externalTasks]);
+          // Add external tasks to the current task list
+          setTasks(prev => [...prev.filter(task => task.source !== provider), ...externalTasks]);
           
           toast.success(`Synced with ${provider} calendar`);
           resolve();
@@ -275,6 +293,11 @@ export function useTasks(selectedDate: Date | undefined) {
         }
       }, 1500); // Simulate network delay
     });
+  };
+  
+  // Refetch tasks when needed
+  const refetchTasks = () => {
+    fetchTasks();
   };
   
   return { 
@@ -288,6 +311,7 @@ export function useTasks(selectedDate: Date | undefined) {
     saveSyncConfigs,
     syncCalendar,
     isLoading,
-    error
+    error,
+    refetchTasks
   };
 }

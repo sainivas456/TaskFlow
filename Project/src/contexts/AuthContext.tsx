@@ -3,7 +3,6 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { User, authService } from "@/lib/api/auth";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { queryClient } from "@/lib/query-client";
 
 interface AuthContextType {
   currentUser: User | null;
@@ -60,7 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       // Clear any existing data before setting new user
-      queryClient.clear();
       localStorage.clear();
       
       // Save new auth data
@@ -86,7 +84,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       // Clear any existing data before setting new user
-      queryClient.clear();
       localStorage.clear();
       
       // Save new auth data
@@ -106,9 +103,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear auth data
     authService.logout();
     setCurrentUser(null);
-    
-    // Clear all React Query caches
-    queryClient.clear();
     
     // Clear all localStorage to prevent any data leakage
     localStorage.clear();
