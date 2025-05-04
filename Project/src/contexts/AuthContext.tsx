@@ -24,17 +24,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Try to load user from local storage
     const loadUser = async () => {
-      const user = authService.getCurrentUser();
-      if (user) {
-        setCurrentUser(user);
-        
-        // Verify the token is still valid
-        const isValid = await authService.checkAuth();
-        if (!isValid) {
-          handleLogout();
+      try {
+        const user = authService.getCurrentUser();
+        if (user) {
+          console.log("Found stored user data:", user.username);
+          setCurrentUser(user);
+          
+          // Verify the token is still valid
+          const isValid = await authService.checkAuth();
+          if (!isValid) {
+            console.log("Stored token is invalid, logging out");
+            handleLogout(false);
+          }
+        } else {
+          console.log("No stored user data found");
         }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+        handleLogout(false);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     
     loadUser();
@@ -49,12 +59,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
       
+      // Clear any existing data before setting new user
+      queryClient.clear();
+      localStorage.clear();
+      
+      // Save new auth data
       authService.saveAuthData(response.data);
       setCurrentUser(response.data.user);
       toast.success("Logged in successfully");
-      
-      // Clear any existing cached data before loading the user's data
-      queryClient.clear();
       
       return true;
     } catch (error) {
@@ -73,6 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
       
+      // Clear any existing data before setting new user
+      queryClient.clear();
+      localStorage.clear();
+      
+      // Save new auth data
       authService.saveAuthData(response.data);
       setCurrentUser(response.data.user);
       toast.success("Account created successfully");
@@ -85,15 +102,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  const handleLogout = () => {
+  const handleLogout = (showToast = true) => {
+    // Clear auth data
     authService.logout();
     setCurrentUser(null);
     
-    // Clear all React Query caches to ensure no data persists between users
+    // Clear all React Query caches
     queryClient.clear();
     
-    // Redirect to login
-    navigate("/login");
+    // Clear all localStorage to prevent any data leakage
+    localStorage.clear();
+    
+    if (showToast) {
+      toast.success("Logged out successfully");
+      // Redirect to login
+      navigate("/login");
+    }
   };
   
   return (
@@ -104,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         register,
-        logout: handleLogout,
+        logout: () => handleLogout(true),
       }}
     >
       {children}

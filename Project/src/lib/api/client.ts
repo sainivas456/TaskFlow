@@ -1,5 +1,6 @@
 
 import { toast } from "sonner";
+import { queryClient } from "@/lib/query-client";
 
 // In production this would be an environment variable
 const API_BASE_URL = "http://localhost:5000/api"; 
@@ -16,6 +17,8 @@ export async function apiRequest<T = any>(
 ): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint}`;
   
+  console.log(`API Request: ${options.method || 'GET'} ${url}`);
+  
   // Default headers
   const headers = {
     "Content-Type": "application/json",
@@ -26,6 +29,9 @@ export async function apiRequest<T = any>(
   const token = localStorage.getItem("auth_token");
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+    console.log("Using auth token:", `Bearer ${token.substring(0, 10)}...`);
+  } else {
+    console.log("No auth token available");
   }
   
   try {
@@ -34,11 +40,17 @@ export async function apiRequest<T = any>(
       headers,
     });
     
+    // Log response status
+    console.log(`API Response: ${response.status} for ${url}`);
+    
     // Handle unauthorized errors specifically
     if (response.status === 401) {
       // Clear auth data and redirect to login
       localStorage.removeItem("auth_token");
       localStorage.removeItem("user_data");
+      
+      // Clear all query cache
+      queryClient.clear();
       
       // Only show toast if we were previously logged in
       if (token) {
@@ -61,6 +73,9 @@ export async function apiRequest<T = any>(
       const data = await response.json();
       
       if (!response.ok) {
+        // Log the error for debugging
+        console.error("API Error:", data);
+        
         // Handle error responses
         toast.error(data.message || "An error occurred");
         return { 
@@ -74,6 +89,7 @@ export async function apiRequest<T = any>(
     
     // Handle non-JSON responses
     if (!response.ok) {
+      console.error("Non-JSON Error Response:", response);
       toast.error("An error occurred");
       return { 
         error: "An error occurred", 

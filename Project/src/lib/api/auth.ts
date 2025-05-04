@@ -39,27 +39,10 @@ export const authService = {
   },
   
   logout: () => {
-    // Clear all user data from localStorage
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("user_data");
+    console.log("Clearing all user data from localStorage");
     
-    // Clear any cached data from localStorage
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (
-        key.startsWith("task-") || 
-        key.startsWith("calendar-") || 
-        key.startsWith("time-tracking-") ||
-        key.startsWith("label-") ||
-        key.startsWith("collaborator-")
-      )) {
-        keysToRemove.push(key);
-      }
-    }
-    
-    // Remove cached items
-    keysToRemove.forEach(key => localStorage.removeItem(key));
+    // Completely clear localStorage to ensure no data persists between sessions
+    localStorage.clear();
     
     return Promise.resolve({ status: 200 });
   },
@@ -83,19 +66,23 @@ export const authService = {
   },
   
   saveAuthData: (data: AuthResponse) => {
+    console.log("Saving auth data for user:", data.user.username);
     localStorage.setItem("auth_token", data.token);
     localStorage.setItem("user_data", JSON.stringify(data.user));
   },
   
   checkAuth: async () => {
     if (!authService.isAuthenticated()) {
+      console.log("No auth token found during checkAuth");
       return false;
     }
     
     try {
       const response = await api.get("/auth/me");
+      console.log("Auth check result:", !response.error);
       return !response.error;
     } catch (error) {
+      console.error("Auth check failed:", error);
       return false;
     }
   },
