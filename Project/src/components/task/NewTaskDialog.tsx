@@ -12,42 +12,106 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { X } from "lucide-react";
 import { toast } from "sonner";
+import { taskService } from "@/lib/api/tasks";
+import { adaptTaskToApi } from "@/lib/utils/taskUtils";
 
 interface NewTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onTaskAdded?: () => void;
 }
 
-export function NewTaskDialog({ open, onOpenChange }: NewTaskDialogProps) {
+export function NewTaskDialog({ open, onOpenChange, onTaskAdded }: NewTaskDialogProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [taskData, setTaskData] = useState({
     title: "",
     description: "",
     priority: "Medium",
     status: "Not Started",
-    dueDate: ""
+    dueDate: "",
+    labels: [] as string[]
   });
+  const [newLabel, setNewLabel] = useState("");
 
-  const handleSubmit = () => {
+  const handleAddLabel = () => {
+    if (!newLabel.trim()) return;
+    
+    if (!taskData.labels.includes(newLabel.trim())) {
+      setTaskData({
+        ...taskData,
+        labels: [...taskData.labels, newLabel.trim()]
+      });
+    }
+    setNewLabel("");
+  };
+
+  const handleRemoveLabel = (labelToRemove: string) => {
+    setTaskData({
+      ...taskData,
+      labels: taskData.labels.filter(label => label !== labelToRemove)
+    });
+  };
+
+  const handleSubmit = async () => {
     // Basic validation
     if (!taskData.title.trim()) {
       toast.error("Task title is required");
       return;
     }
 
-    // Here you would normally call an API to create the task
-    // For now, we'll just show a success message
-    toast.success("Task created successfully!");
-    
-    // Reset form and close dialog
-    setTaskData({
-      title: "",
-      description: "",
-      priority: "Medium",
-      status: "Not Started",
-      dueDate: ""
-    });
-    onOpenChange(false);
+    if (!taskData.dueDate) {
+      toast.error("Due date is required");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      // Convert task data to the format expected by the API
+      const apiTaskData = {
+        title: taskData.title,
+        description: taskData.description || "",
+        due_date: taskData.dueDate,
+        priority: taskData.priority === "High" ? 5 : taskData.priority === "Medium" ? 3 : 1,
+        status: taskData.status === "Not Started" ? "Pending" : taskData.status,
+        labels: taskData.labels
+      };
+      
+      console.log("Creating new task with data:", apiTaskData);
+      const response = await taskService.createTask(apiTaskData);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      console.log("Task created successfully:", response.data);
+      toast.success("Task created successfully!");
+      
+      // Reset form and close dialog
+      setTaskData({
+        title: "",
+        description: "",
+        priority: "Medium",
+        status: "Not Started",
+        dueDate: "",
+        labels: []
+      });
+      
+      onOpenChange(false);
+      
+      // Notify parent component to refresh tasks
+      if (onTaskAdded) {
+        onTaskAdded();
+      }
+    } catch (error: any) {
+      console.error("Failed to create task:", error);
+      toast.error(`Failed to create task: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -127,11 +191,51 @@ export function NewTaskDialog({ open, onOpenChange }: NewTaskDialogProps) {
               onChange={(e) => setTaskData({ ...taskData, dueDate: e.target.value })}
             />
           </div>
+          
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="labels" className="text-sm font-medium">Labels</label>
+              <div className="flex gap-2">
+                <Input
+                  id="newLabel"
+                  placeholder="Add a label"
+                  className="h-8 w-40"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddLabel();
+                    }
+                  }}
+                />
+                <Button size="sm" onClick={handleAddLabel}>Add</Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {taskData.labels.map((label) => (
+                <Badge key={label} variant="outline" className="bg-accent/40 group">
+                  {label}
+                  <button 
+                    className="ml-1 text-muted-foreground hover:text-foreground"
+                    onClick={() => handleRemoveLabel(label)}
+                  >
+                    <X size={12} />
+                  </button>
+                </Badge>
+              ))}
+              {taskData.labels.length === 0 && (
+                <div className="text-sm text-muted-foreground">No labels added</div>
+              )}
+            </div>
+          </div>
         </div>
         
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit}>Create Task</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting ? "Creating..." : "Create Task"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

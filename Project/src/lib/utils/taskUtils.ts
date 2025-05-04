@@ -68,12 +68,15 @@ export function adaptTaskFromApi(task: Task): FrontendTask {
   };
 }
 
-export function adaptTaskToApi(task: FrontendTask): Partial<Task> {
-  return {
-    title: task.title,
-    description: task.description || null,
-    due_date: task.dueDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
-    priority: mapPriorityToDb(task.priority),
-    status: mapStatusToDb(task.status)
-  };
+export function adaptTaskToApi(task: Partial<FrontendTask>): Partial<Task> {
+  const apiTask: Partial<Task> = {};
+  
+  if (task.title !== undefined) apiTask.title = task.title;
+  if (task.description !== undefined) apiTask.description = task.description || null;
+  if (task.dueDate !== undefined) apiTask.due_date = task.dueDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+  if (task.priority !== undefined) apiTask.priority = mapPriorityToDb(task.priority);
+  if (task.status !== undefined) apiTask.status = mapStatusToDb(task.status);
+  if (task.labels !== undefined) apiTask.labels = task.labels;
+  
+  return apiTask;
 }

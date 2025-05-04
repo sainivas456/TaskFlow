@@ -6,11 +6,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Download,
   Home,
   Import,
   Layers,
-  Menu,
   Plus,
   Settings,
   Tags,
@@ -28,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { NewTaskDialog } from "./task/NewTaskDialog";
+import { useLocation as useRouterLocation } from "react-router-dom";
 
 const sidebarItems = [
   { name: "Dashboard", icon: Home, path: "/" },
@@ -45,6 +44,17 @@ export function AppSidebar() {
   const location = useLocation();
   const [expanded, setExpanded] = useState(true);
   const [newTaskDialogOpen, setNewTaskDialogOpen] = useState(false);
+  const routerLocation = useRouterLocation();
+
+  const handleTaskAdded = () => {
+    // If we're on the tasks page, navigate there to refresh the content
+    if (routerLocation.pathname !== '/tasks') {
+      navigate("/tasks");
+    } else {
+      // Force a refresh of the current page by navigating to it again
+      navigate(0);
+    }
+  };
 
   return (
     <>
@@ -116,7 +126,11 @@ export function AppSidebar() {
       </Sidebar>
       
       {/* New Task Dialog */}
-      <NewTaskDialog open={newTaskDialogOpen} onOpenChange={setNewTaskDialogOpen} />
+      <NewTaskDialog 
+        open={newTaskDialogOpen} 
+        onOpenChange={setNewTaskDialogOpen} 
+        onTaskAdded={handleTaskAdded}
+      />
     </>
   );
 }
