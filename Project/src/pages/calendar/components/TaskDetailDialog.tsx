@@ -56,9 +56,11 @@ export default function TaskDetailDialog({
   // Determine if task is from an external source
   const isExternalTask = task?.source && task.source !== "local";
 
+  // Reset editing state and update editedTask when task changes
   useEffect(() => {
     if (task) {
-      setEditedTask(task);
+      setEditedTask({...task});
+      setIsEditing(false);
     }
   }, [task]);
 
@@ -123,7 +125,16 @@ export default function TaskDetailDialog({
   const handleStatusUpdate = (status: TaskType["status"]) => {
     if (task) {
       onUpdateStatus(task.id, status);
-      setEditedTask({ ...editedTask, status });
+    }
+  };
+
+  const toggleEditMode = () => {
+    if (task) {
+      if (isEditing) {
+        // Cancel editing - reset to original task
+        setEditedTask({...task});
+      }
+      setIsEditing(!isEditing);
     }
   };
 
@@ -155,7 +166,7 @@ export default function TaskDetailDialog({
                 <DropdownMenuContent align="end">
                   {!isExternalTask && (
                     <DropdownMenuItem 
-                      onClick={() => setIsEditing(true)}
+                      onClick={toggleEditMode}
                       disabled={isUpdating}
                     >
                       <Edit className="mr-2 h-4 w-4" />
@@ -196,7 +207,7 @@ export default function TaskDetailDialog({
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  onClick={() => setIsEditing(false)}
+                  onClick={toggleEditMode}
                   disabled={isUpdating}
                 >
                   <X size={18} />
@@ -268,7 +279,7 @@ export default function TaskDetailDialog({
                   >
                     <CalendarIcon size={16} className="mr-2 text-muted-foreground" />
                     {editedTask.dueDate ? format(
-                      editedTask.dueDate, 
+                      editedTask.dueDate instanceof Date ? editedTask.dueDate : new Date(editedTask.dueDate), 
                       'PPP'
                     ) : 'Select date'}
                   </Button>
@@ -276,7 +287,9 @@ export default function TaskDetailDialog({
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
-                    selected={editedTask.dueDate instanceof Date ? editedTask.dueDate : undefined}
+                    selected={editedTask.dueDate instanceof Date ? 
+                      editedTask.dueDate : 
+                      editedTask.dueDate ? new Date(editedTask.dueDate) : undefined}
                     onSelect={(date) => setEditedTask({ ...editedTask, dueDate: date })}
                     initialFocus
                     className="p-3 pointer-events-auto"
@@ -286,12 +299,20 @@ export default function TaskDetailDialog({
             ) : (
               <div className="flex items-center text-sm">
                 <CalendarIcon size={16} className="mr-2 text-muted-foreground" />
-                <span>{task.dueDate.toLocaleDateString(undefined, {
-                  weekday: 'long',
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric'
-                })}</span>
+                <span>{task.dueDate instanceof Date ? 
+                  task.dueDate.toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                  }) : 
+                  new Date(task.dueDate).toLocaleDateString(undefined, {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })
+                }</span>
               </div>
             )}
           </div>
@@ -362,7 +383,7 @@ export default function TaskDetailDialog({
             <div className="flex justify-between w-full">
               <Button 
                 variant="outline" 
-                onClick={() => setIsEditing(false)}
+                onClick={toggleEditMode}
                 disabled={isUpdating}
               >
                 Cancel

@@ -66,8 +66,12 @@ export const TaskDetail = ({
 
   // Reset editing state when selected task changes
   useEffect(() => {
-    setIsEditing(false);
-    setEditedTask(selectedTask ? {...selectedTask} : null);
+    if (selectedTask) {
+      setEditedTask({...selectedTask});
+      setIsEditing(false);
+    } else {
+      setEditedTask(null);
+    }
   }, [selectedTask]);
 
   const handleAddSubtask = () => {
@@ -86,7 +90,7 @@ export const TaskDetail = ({
   const toggleEditMode = () => {
     if (isEditing) {
       // If we're exiting edit mode without saving, reset to original
-      setEditedTask({...selectedTask});
+      setEditedTask(selectedTask ? {...selectedTask} : null);
     }
     setIsEditing(!isEditing);
   };
@@ -140,7 +144,7 @@ export const TaskDetail = ({
 
   const getButtonLabel = () => {
     if (selectedTask.status === "Completed") {
-      return "Mark as Working";
+      return "Mark as Not Started";
     } else {
       return "Mark as Completed";
     }
@@ -247,17 +251,17 @@ export const TaskDetail = ({
                   value={editedTask.priority} 
                   onChange={(e) => setEditedTask({...editedTask, priority: e.target.value})}
                 >
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
+                  <option value="5">High</option>
+                  <option value="3">Medium</option>
+                  <option value="1">Low</option>
                 </select>
               ) : (
                 <Badge variant={
-                  selectedTask.priority === "High" ? "destructive" : 
-                  selectedTask.priority === "Medium" ? "outline" : 
+                  selectedTask.priority >= 4 ? "destructive" : 
+                  selectedTask.priority >= 2 ? "outline" : 
                   "secondary"
                 }>
-                  {selectedTask.priority}
+                  {selectedTask.priority >= 4 ? "High" : selectedTask.priority >= 2 ? "Medium" : "Low"}
                 </Badge>
               )}
             </div>
