@@ -25,6 +25,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 interface TaskDetailProps {
   open: boolean;
@@ -59,6 +62,7 @@ export const TaskDetail = ({
   const [newLabel, setNewLabel] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [editedTask, setEditedTask] = useState<any>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Reset editing state when selected task changes
   useEffect(() => {
@@ -88,21 +92,39 @@ export const TaskDetail = ({
   };
 
   // Save edited task
-  const saveEditedTask = () => {
+  const saveEditedTask = async () => {
     if (!editedTask || !selectedTask) return;
     
-    // Update task with edited fields
-    const updatedFields = {
-      title: editedTask.title,
-      description: editedTask.description,
-      priority: editedTask.priority,
-      // Add other fields as needed
-    };
-    
-    // Call API to update task
-    updateTask(selectedTask.task_id, updatedFields);
-    setIsEditing(false);
-    toast.success("Task updated successfully");
+    try {
+      setIsUpdating(true);
+      
+      // Prepare all updated fields
+      const updatedFields = {
+        title: editedTask.title,
+        description: editedTask.description,
+        priority: editedTask.priority,
+        due_date: editedTask.due_date,
+        // Don't update status here as it has its own function
+      };
+      
+      // Convert date object to string format if it's a Date object
+      if (updatedFields.due_date instanceof Date) {
+        updatedFields.due_date = format(updatedFields.due_date, 'yyyy-MM-dd');
+      }
+      
+      console.log("Updating task with data:", updatedFields);
+      
+      // Call API to update task
+      await updateTask(selectedTask.task_id, updatedFields);
+      
+      setIsEditing(false);
+      toast.success("Task updated successfully");
+    } catch (error) {
+      console.error("Failed to update task:", error);
+      toast.error("Failed to update task. Please try again.");
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   if (!selectedTask) return null;
@@ -124,6 +146,13 @@ export const TaskDetail = ({
     }
   };
 
+  // Format date for display
+  const formatDate = (date: string | Date) => {
+    if (!date) return "";
+    const dateObj = date instanceof Date ? date : new Date(date);
+    return format(dateObj, 'PPP'); // Format as "Month Day, Year"
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
@@ -134,6 +163,7 @@ export const TaskDetail = ({
                 value={editedTask.title} 
                 onChange={(e) => setEditedTask({...editedTask, title: e.target.value})}
                 className="text-xl"
+                placeholder="Task title"
               />
             ) : (
               <DialogTitle className="text-xl">{selectedTask.title}</DialogTitle>
@@ -143,6 +173,7 @@ export const TaskDetail = ({
                 variant="outline" 
                 size="icon"
                 onClick={toggleEditMode}
+                disabled={isUpdating}
               >
                 {isEditing ? <Save size={16} /> : <Edit size={16} />}
               </Button>
@@ -232,10 +263,33 @@ export const TaskDetail = ({
             </div>
             <div>
               <h4 className="text-xs text-muted-foreground mb-1">Due Date</h4>
-              <div className="text-sm flex items-center">
-                <CalendarDays size={14} className="mr-1" />
-                <span>{new Date(selectedTask.due_date).toLocaleDateString()}</span>
-              </div>
+              {isEditing ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="h-8 text-sm"
+                    >
+                      <CalendarDays size={14} className="mr-1" />
+                      {editedTask.due_date ? formatDate(editedTask.due_date) : "Select date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={editedTask.due_date ? new Date(editedTask.due_date) : undefined}
+                      onSelect={(date) => setEditedTask({...editedTask, due_date: date})}
+                      initialFocus
+                      className="p-3 pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <div className="text-sm flex items-center">
+                  <CalendarDays size={14} className="mr-1" />
+                  <span>{new Date(selectedTask.due_date).toLocaleDateString()}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -355,11 +409,11 @@ export const TaskDetail = ({
         <DialogFooter>
           {isEditing ? (
             <>
-              <Button variant="outline" onClick={toggleEditMode}>
+              <Button variant="outline" onClick={toggleEditMode} disabled={isUpdating}>
                 Cancel
               </Button>
-              <Button onClick={saveEditedTask}>
-                Save Changes
+              <Button onClick={saveEditedTask} disabled={isUpdating}>
+                {isUpdating ? 'Saving...' : 'Save Changes'}
               </Button>
             </>
           ) : (

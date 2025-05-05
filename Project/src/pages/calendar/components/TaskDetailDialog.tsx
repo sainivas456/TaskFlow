@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,8 +5,30 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, CheckCircle2, Clock, Edit2, ExternalLink, Tags, Trash } from "lucide-react";
+import { 
+  Calendar as CalendarIcon, 
+  CheckCircle2, 
+  Clock, 
+  CircleDashed,
+  Edit, 
+  ExternalLink, 
+  MoreHorizontal, 
+  Save, 
+  Trash,
+  X
+} from "lucide-react";
 import { TaskType } from "../types";
+import { format } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 interface TaskDetailDialogProps {
   task: TaskType | null;
@@ -29,6 +50,7 @@ export default function TaskDetailDialog({
   const [isEditing, setIsEditing] = useState(false);
   const [editedTask, setEditedTask] = useState<Partial<TaskType>>({});
   const [newLabel, setNewLabel] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Determine if task is from an external source
   const isExternalTask = task?.source && task.source !== "local";
@@ -39,10 +61,39 @@ export default function TaskDetailDialog({
     }
   }, [task]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (task && editedTask.title?.trim()) {
-      onEdit(task.id, editedTask);
-      setIsEditing(false);
+      try {
+        setIsUpdating(true);
+        
+        // Prepare full update data
+        const updateData: Partial<TaskType> = {
+          title: editedTask.title,
+          description: editedTask.description,
+          priority: editedTask.priority,
+          labels: editedTask.labels
+        };
+        
+        // If due date was changed and is a Date object
+        if (editedTask.dueDate && editedTask.dueDate instanceof Date) {
+          updateData.dueDate = editedTask.dueDate;
+        }
+        
+        console.log("Updating calendar task with:", updateData);
+        
+        // Call API to update task
+        await onEdit(task.id, updateData);
+        
+        setIsEditing(false);
+        toast.success("Task updated successfully");
+      } catch (error) {
+        console.error("Failed to update task:", error);
+        toast.error("Failed to update task. Please try again.");
+      } finally {
+        setIsUpdating(false);
+      }
+    } else {
+      toast.error("Task title cannot be empty");
     }
   };
 
@@ -87,31 +138,78 @@ export default function TaskDetailDialog({
                 value={editedTask.title || ""}
                 onChange={(e) => setEditedTask({ ...editedTask, title: e.target.value })}
                 className="text-xl font-bold"
+                placeholder="Task title"
               />
             ) : (
               <DialogTitle className="text-xl">{task.title}</DialogTitle>
             )}
-            <div className="flex gap-2">
-              {!isExternalTask && (
+            
+            {!isEditing && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <MoreHorizontal size={20} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {!isExternalTask && (
+                    <DropdownMenuItem 
+                      onClick={() => setIsEditing(true)}
+                      disabled={isUpdating}
+                    >
+                      <Edit className="mr-2 h-4 w-4" />
+                      Edit Task
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => handleStatusUpdate("Completed")}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Mark as Completed
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusUpdate("In Progress")}>
+                    <Clock className="mr-2 h-4 w-4" />
+                    Mark as In Progress
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusUpdate("Not Started")}>
+                    <CircleDashed className="mr-2 h-4 w-4" />
+                    Mark as Not Started
+                  </DropdownMenuItem>
+                  {!isExternalTask && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={handleDelete}
+                        disabled={isUpdating}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash className="mr-2 h-4 w-4" />
+                        Delete Task
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            
+            {isEditing && (
+              <div className="flex gap-2">
                 <Button 
-                  variant="outline" 
+                  variant="ghost" 
                   size="icon" 
-                  onClick={() => setIsEditing(!isEditing)}
+                  onClick={() => setIsEditing(false)}
+                  disabled={isUpdating}
                 >
-                  <Edit2 size={16} />
+                  <X size={18} />
                 </Button>
-              )}
-              {!isExternalTask && (
                 <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="text-destructive hover:bg-destructive/10"
-                  onClick={handleDelete}
+                  variant="ghost" 
+                  size="icon"
+                  onClick={handleSave}
+                  disabled={isUpdating}
                 >
-                  <Trash size={16} />
+                  <Save size={18} />
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </DialogHeader>
 
@@ -160,15 +258,41 @@ export default function TaskDetailDialog({
 
           <div>
             <h4 className="text-sm font-medium mb-2">Due Date</h4>
-            <div className="flex items-center text-sm">
-              <Calendar size={16} className="mr-2 text-muted-foreground" />
-              <span>{task.dueDate.toLocaleDateString(undefined, {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-              })}</span>
-            </div>
+            {isEditing ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start text-left"
+                  >
+                    <CalendarIcon size={16} className="mr-2 text-muted-foreground" />
+                    {editedTask.dueDate ? format(
+                      editedTask.dueDate, 
+                      'PPP'
+                    ) : 'Select date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={editedTask.dueDate instanceof Date ? editedTask.dueDate : undefined}
+                    onSelect={(date) => setEditedTask({ ...editedTask, dueDate: date })}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <div className="flex items-center text-sm">
+                <CalendarIcon size={16} className="mr-2 text-muted-foreground" />
+                <span>{task.dueDate.toLocaleDateString(undefined, {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}</span>
+              </div>
+            )}
           </div>
 
           <Separator />
@@ -235,39 +359,22 @@ export default function TaskDetailDialog({
         <DialogFooter className="mt-6">
           {isEditing ? (
             <div className="flex justify-between w-full">
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsEditing(false)}
+                disabled={isUpdating}
+              >
                 Cancel
               </Button>
-              <Button onClick={handleSave}>Save Changes</Button>
+              <Button 
+                onClick={handleSave}
+                disabled={isUpdating}
+              >
+                {isUpdating ? 'Saving...' : 'Save Changes'}
+              </Button>
             </div>
           ) : (
-            <div className="flex justify-between w-full">
-              {!isExternalTask && (
-                <div className="space-x-2">
-                  <Button 
-                    variant="outline" 
-                    className="gap-2"
-                    onClick={() => handleStatusUpdate(
-                      task.status === "Completed" ? "Not Started" : "Completed"
-                    )}
-                  >
-                    <CheckCircle2 size={16} />
-                    {task.status === "Completed" ? "Mark as Not Started" : "Mark as Completed"}
-                  </Button>
-                  {task.status !== "In Progress" && (
-                    <Button 
-                      variant="outline" 
-                      className="gap-2"
-                      onClick={() => handleStatusUpdate("In Progress")}
-                    >
-                      <Clock size={16} />
-                      Mark as In Progress
-                    </Button>
-                  )}
-                </div>
-              )}
-              <Button variant="outline" onClick={onClose}>Close</Button>
-            </div>
+            <Button variant="outline" onClick={onClose}>Close</Button>
           )}
         </DialogFooter>
       </DialogContent>
