@@ -32,6 +32,7 @@ export default function Tasks() {
     deleteSubtask,
     handleTaskAdded,
     handleUpdateTaskStatus,
+    updateTask,
     deleteTask,
     addLabel,
     removeLabel,

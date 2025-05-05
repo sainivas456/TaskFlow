@@ -2,47 +2,65 @@
 import { useTasksState } from "./useTasksState";
 
 export const useTasksStateAdapter = () => {
-  const taskState = useTasksState();
-  
-  // Create adapter for toggleSubtaskCompletion to match expected signature
-  const toggleSubtaskCompletionAdapter = (subtaskId: number) => {
-    if (taskState.selectedTask) {
-      return taskState.toggleSubtaskCompletion(subtaskId);
-    }
-  };
-  
-  // Create adapter for addSubtask to match expected signature
-  const addSubtaskAdapter = (title: string) => {
-    if (taskState.selectedTask) {
-      return taskState.addSubtask(taskState.selectedTask.task_id, title);
-    }
-  };
-  
-  // Create adapter for deleteSubtask to match expected signature
-  const deleteSubtaskAdapter = (subtaskId: number) => {
-    if (taskState.selectedTask) {
-      return taskState.deleteSubtask(taskState.selectedTask.task_id, subtaskId);
-    }
-  };
-  
-  // Create adapter for addLabel to match expected signature in TaskDetail component
-  const addLabelAdapter = (label: string) => {
-    if (taskState.selectedTask) {
-      return taskState.addLabel(taskState.selectedTask.task_id, label);
-    }
-  };
-  
-  // Create adapter for removeLabel to match expected signature in TaskDetail component
-  const removeLabelAdapter = (taskId: number, label: string) => {
-    return taskState.removeLabel(taskId, label);
-  };
-  
+  const {
+    filteredTasks,
+    tasks,
+    labels,
+    categories,
+    selectedCategory,
+    selectedTask,
+    openTaskDetail,
+    searchQuery,
+    activeFilters,
+    addTaskOpen,
+    isLoading,
+    error,
+    setSelectedCategory,
+    setSearchQuery,
+    applyFilter,
+    resetFilters,
+    handleTaskClick,
+    toggleSubtaskCompletion,
+    addSubtask,
+    deleteSubtask,
+    handleTaskAdded,
+    handleUpdateTaskStatus,
+    updateTask,
+    deleteTask,
+    addLabel,
+    removeLabel,
+    setOpenTaskDetail,
+    setAddTaskOpen
+  } = useTasksState();
+
   return {
-    ...taskState,
-    toggleSubtaskCompletion: toggleSubtaskCompletionAdapter,
-    addSubtask: addSubtaskAdapter,
-    deleteSubtask: deleteSubtaskAdapter,
-    addLabel: addLabelAdapter,
-    removeLabel: removeLabelAdapter
+    filteredTasks,
+    tasks,
+    labels,
+    categories,
+    selectedCategory,
+    selectedTask,
+    openTaskDetail,
+    searchQuery,
+    activeFilters,
+    addTaskOpen,
+    isLoading,
+    error,
+    setSelectedCategory,
+    setSearchQuery,
+    applyFilter,
+    resetFilters,
+    handleTaskClick,
+    toggleSubtaskCompletion,
+    addSubtask,
+    deleteSubtask,
+    handleTaskAdded,
+    handleUpdateTaskStatus,
+    updateTask, // Add this function to the returned object
+    deleteTask,
+    addLabel,
+    removeLabel,
+    setOpenTaskDetail,
+    setAddTaskOpen
   };
 };

@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/lib/api/labels";
 import { cn } from "@/lib/utils";
-import { CalendarDays, CheckCircle2, CircleDashed, Clock, Edit, MoreHorizontal, Trash2, UserPlus, X } from "lucide-react";
+import { CalendarDays, CheckCircle2, CircleDashed, Clock, Edit, MoreHorizontal, Save, Trash2, UserPlus, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
 
 interface TaskDetailProps {
   open: boolean;
@@ -52,6 +54,14 @@ export const TaskDetail = ({
 }: TaskDetailProps) => {
   const [newSubtask, setNewSubtask] = useState("");
   const [newLabel, setNewLabel] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedTask, setEditedTask] = useState<any>(null);
+
+  // Reset editing state when selected task changes
+  useEffect(() => {
+    setIsEditing(false);
+    setEditedTask(selectedTask ? {...selectedTask} : null);
+  }, [selectedTask]);
 
   const handleAddSubtask = () => {
     if (!newSubtask.trim()) return;
@@ -65,6 +75,36 @@ export const TaskDetail = ({
     setNewLabel("");
   };
 
+  // Toggle edit mode
+  const toggleEditMode = () => {
+    if (isEditing) {
+      // If we're exiting edit mode without saving, reset to original
+      setEditedTask({...selectedTask});
+    }
+    setIsEditing(!isEditing);
+  };
+
+  // Save edited task
+  const saveEditedTask = () => {
+    if (!editedTask || !selectedTask) return;
+    
+    // Update task with edited fields
+    const updatedFields = {
+      title: editedTask.title,
+      description: editedTask.description,
+      priority: editedTask.priority,
+      // Add other fields as needed
+    };
+    
+    // Call API to update task
+    // This function needs to be implemented in the parent component
+    // For now, we'll just exit edit mode
+    setIsEditing(false);
+    
+    // Here you would typically call something like:
+    // onUpdateTask(selectedTask.task_id, updatedFields);
+  };
+
   if (!selectedTask) return null;
 
   return (
@@ -72,10 +112,22 @@ export const TaskDetail = ({
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl">{selectedTask.title}</DialogTitle>
+            {isEditing ? (
+              <Input 
+                value={editedTask.title} 
+                onChange={(e) => setEditedTask({...editedTask, title: e.target.value})}
+                className="text-xl"
+              />
+            ) : (
+              <DialogTitle className="text-xl">{selectedTask.title}</DialogTitle>
+            )}
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon">
-                <Edit size={16} />
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={toggleEditMode}
+              >
+                {isEditing ? <Save size={16} /> : <Edit size={16} />}
               </Button>
               <Button variant="outline" size="icon">
                 <UserPlus size={16} />
@@ -95,7 +147,7 @@ export const TaskDetail = ({
                     <Clock className="mr-2 h-4 w-4" />
                     Mark as In Progress
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onUpdateTaskStatus(selectedTask.task_id, "Not Started")}>
+                  <DropdownMenuItem onClick={() => onUpdateTaskStatus(selectedTask.task_id, "Pending")}>
                     <CircleDashed className="mr-2 h-4 w-4" />
                     Mark as Not Started
                   </DropdownMenuItem>
@@ -111,14 +163,22 @@ export const TaskDetail = ({
         </DialogHeader>
         
         <div className="space-y-4 my-4">
-          {selectedTask.description && (
-            <div>
-              <h4 className="text-sm font-medium mb-2">Description</h4>
+          {/* Description section */}
+          <div>
+            <h4 className="text-sm font-medium mb-2">Description</h4>
+            {isEditing ? (
+              <Textarea 
+                value={editedTask.description || ''} 
+                onChange={(e) => setEditedTask({...editedTask, description: e.target.value})}
+                className="min-h-[100px]"
+                placeholder="Add a description..."
+              />
+            ) : (
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {selectedTask.description}
+                {selectedTask.description || "No description added yet"}
               </p>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex flex-wrap gap-3">
             <div>
@@ -128,18 +188,30 @@ export const TaskDetail = ({
                 selectedTask.status === "In Progress" ? "outline" : 
                 "secondary"
               }>
-                {selectedTask.status}
+                {selectedTask.status === "Pending" ? "Not Started" : selectedTask.status}
               </Badge>
             </div>
             <div>
               <h4 className="text-xs text-muted-foreground mb-1">Priority</h4>
-              <Badge variant={
-                selectedTask.priority === "High" ? "destructive" : 
-                selectedTask.priority === "Medium" ? "outline" : 
-                "secondary"
-              }>
-                {selectedTask.priority}
-              </Badge>
+              {isEditing ? (
+                <select 
+                  className="h-8 text-sm rounded-md border px-2"
+                  value={editedTask.priority} 
+                  onChange={(e) => setEditedTask({...editedTask, priority: e.target.value})}
+                >
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              ) : (
+                <Badge variant={
+                  selectedTask.priority === "High" ? "destructive" : 
+                  selectedTask.priority === "Medium" ? "outline" : 
+                  "secondary"
+                }>
+                  {selectedTask.priority}
+                </Badge>
+              )}
             </div>
             <div>
               <h4 className="text-xs text-muted-foreground mb-1">Due Date</h4>
@@ -264,17 +336,30 @@ export const TaskDetail = ({
         </div>
         
         <DialogFooter>
-          <Button 
-            variant="outline" 
-            onClick={() => onOpenChange(false)}
-          >
-            Close
-          </Button>
-          <Button 
-            onClick={() => onUpdateTaskStatus(selectedTask.task_id, selectedTask.status === "Completed" ? "Not Started" : "Completed")}
-          >
-            {selectedTask.status === "Completed" ? "Mark as Not Started" : "Mark as Completed"}
-          </Button>
+          {isEditing ? (
+            <>
+              <Button variant="outline" onClick={toggleEditMode}>
+                Cancel
+              </Button>
+              <Button onClick={saveEditedTask}>
+                Save Changes
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => onOpenChange(false)}
+              >
+                Close
+              </Button>
+              <Button 
+                onClick={() => onUpdateTaskStatus(selectedTask.task_id, selectedTask.status === "Completed" ? "Pending" : "Completed")}
+              >
+                {selectedTask.status === "Completed" ? "Mark as Not Started" : "Mark as Completed"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

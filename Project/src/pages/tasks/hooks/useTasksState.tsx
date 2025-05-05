@@ -235,26 +235,75 @@ export const useTasksState = () => {
   // Function to update task status
   const handleUpdateTaskStatus = async (taskId: number, status: string) => {
     try {
-      const response = status === "Completed" 
+      // Map the UI status "Not Started" to the database status "Pending"
+      const dbStatus = status === "Not Started" ? "Pending" : status;
+      
+      const response = dbStatus === "Completed" 
         ? await taskService.completeTask(taskId)
-        : await taskService.updateTask(taskId, { status });
+        : await taskService.updateTask(taskId, { status: dbStatus });
       
       if (response.error) {
         throw new Error(response.error);
       }
       
-      refetchTasks();
+      // Update local state
+      const updatedTask = response.data;
       
+      // If task is in the selected task state, update it
       if (selectedTask && selectedTask.task_id === taskId) {
+        // Map "Pending" status back to "Not Started" for UI display
+        const uiStatus = updatedTask.status === "Pending" ? "Not Started" : updatedTask.status;
         setSelectedTask({
-          ...selectedTask,
-          status
+          ...updatedTask,
+          status: uiStatus
         });
       }
       
+      // Refetch to update the task list
+      refetchTasks();
+      
       toast.success(`Task marked as ${status}`);
     } catch (err) {
-      toast.error(`Failed to update task status: ${(err as Error).message}`);
+      console.error(`Error updating task status:`, err);
+      toast.error(`Failed to update task status: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  // Function to update task
+  const updateTask = async (taskId: number, updatedData: any) => {
+    try {
+      // Map the UI status "Not Started" to the database status "Pending" if present
+      if (updatedData.status === "Not Started") {
+        updatedData.status = "Pending";
+      }
+      
+      const response = await taskService.updateTask(taskId, updatedData);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      // Update local state
+      const updatedTask = response.data;
+      
+      // If task is in the selected task state, update it
+      if (selectedTask && selectedTask.task_id === taskId) {
+        // Map "Pending" status back to "Not Started" for UI display
+        if (updatedTask.status === "Pending") {
+          updatedTask.status = "Not Started";
+        }
+        setSelectedTask(updatedTask);
+      }
+      
+      // Refetch to update the task list
+      refetchTasks();
+      
+      toast.success("Task updated successfully");
+      return updatedTask;
+    } catch (err) {
+      console.error(`Error updating task:`, err);
+      toast.error(`Failed to update task: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      throw err;
     }
   };
 
@@ -267,19 +316,25 @@ export const useTasksState = () => {
         throw new Error(response.error);
       }
       
-      refetchTasks();
+      // Close task detail dialog and clear selected task
       setOpenTaskDetail(false);
+      setSelectedTask(null);
+      
+      // Refetch to update the task list
+      refetchTasks();
+      
       toast.success("Task deleted successfully");
     } catch (err) {
-      toast.error(`Failed to delete task: ${(err as Error).message}`);
+      console.error(`Error deleting task:`, err);
+      toast.error(`Failed to delete task: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
   // Function to toggle subtask completion
-  const toggleSubtaskCompletion = async (subtaskId: number) => {
+  const toggleSubtaskCompletion = (subtaskId: number) => {
     if (!selectedTask || !selectedTask.subtasks) return;
     
-    // Create a deep copy of the selected task to modify
+    // Create a deep copy of the selected task
     const updatedTask = { ...selectedTask };
     const updatedSubtasks = [...updatedTask.subtasks];
     
@@ -291,40 +346,28 @@ export const useTasksState = () => {
         completed: !updatedSubtasks[subtaskIndex].completed
       };
       
-      // Recalculate progress based on completed subtasks
+      // Recalculate progress
       const completedCount = updatedSubtasks.filter(st => st.completed).length;
       const progress = Math.round((completedCount / updatedSubtasks.length) * 100);
       
-      try {
-        // Update the task with new subtasks and progress
-        const response = await taskService.updateTask(selectedTask.task_id, {
-          progress // Now valid because we've updated the type
-        });
-        
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        
-        // Update local state
-        setSelectedTask({
-          ...updatedTask,
-          subtasks: updatedSubtasks,
-          progress
-        });
-        
-        refetchTasks();
-      } catch (err) {
-        toast.error(`Failed to update subtask: ${(err as Error).message}`);
-      }
+      // Update the task
+      updateTask(selectedTask.task_id, {
+        subtasks: updatedSubtasks,
+        progress
+      });
+      
+      // Update local state
+      setSelectedTask({
+        ...updatedTask,
+        subtasks: updatedSubtasks,
+        progress
+      });
     }
   };
 
   // Function to add subtask
-  const addSubtask = async (taskId: number, subtaskTitle: string) => {
-    if (!subtaskTitle.trim() || !selectedTask) {
-      toast.error("Subtask title cannot be empty");
-      return;
-    }
+  const addSubtask = (subtaskTitle: string) => {
+    if (!subtaskTitle.trim() || !selectedTask) return;
     
     // Create a deep copy of the selected task
     const updatedTask = { ...selectedTask };
@@ -341,35 +384,25 @@ export const useTasksState = () => {
     });
     
     // Recalculate progress
-    const progress = updatedSubtasks.length > 0
-      ? Math.round((updatedSubtasks.filter(st => st.completed).length / updatedSubtasks.length) * 100)
-      : 0;
+    const completedCount = updatedSubtasks.filter(st => st.completed).length;
+    const progress = Math.round((completedCount / updatedSubtasks.length) * 100);
     
-    try {
-      // Update the task
-      const response = await taskService.updateTask(taskId, {
-        progress // Now valid because we've updated the type
-      });
-      
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      
-      // Update local state
-      setSelectedTask({
-        ...updatedTask,
-        subtasks: updatedSubtasks,
-        progress
-      });
-      
-      refetchTasks();
-    } catch (err) {
-      toast.error(`Failed to add subtask: ${(err as Error).message}`);
-    }
+    // Update the task
+    updateTask(selectedTask.task_id, {
+      subtasks: updatedSubtasks,
+      progress
+    });
+    
+    // Update local state
+    setSelectedTask({
+      ...updatedTask,
+      subtasks: updatedSubtasks,
+      progress
+    });
   };
 
   // Function to delete subtask
-  const deleteSubtask = async (taskId: number, subtaskId: number) => {
+  const deleteSubtask = (subtaskId: number) => {
     if (!selectedTask || !selectedTask.subtasks) return;
     
     // Create a deep copy of the selected task
@@ -383,111 +416,88 @@ export const useTasksState = () => {
       ? Math.round((updatedSubtasks.filter(st => st.completed).length / updatedSubtasks.length) * 100)
       : 0;
     
-    try {
-      // Update the task
-      const response = await taskService.updateTask(taskId, {
-        progress // Now valid because we've updated the type
-      });
+    // Update the task
+    updateTask(selectedTask.task_id, {
+      subtasks: updatedSubtasks,
+      progress
+    });
+    
+    // Update local state
+    setSelectedTask({
+      ...updatedTask,
+      subtasks: updatedSubtasks,
+      progress
+    });
+  };
+
+  // Function to add label
+  const addLabel = (labelName: string) => {
+    if (!labelName.trim() || !selectedTask) return;
+    
+    // Create a deep copy of the selected task
+    const updatedTask = { ...selectedTask };
+    const updatedLabels = updatedTask.labels ? [...updatedTask.labels] : [];
+    
+    // Add the new label if it doesn't exist already
+    if (!updatedLabels.includes(labelName)) {
+      updatedLabels.push(labelName);
       
-      if (response.error) {
-        throw new Error(response.error);
-      }
+      // Update the task
+      updateTask(selectedTask.task_id, {
+        labels: updatedLabels
+      });
       
       // Update local state
       setSelectedTask({
         ...updatedTask,
-        subtasks: updatedSubtasks,
-        progress
+        labels: updatedLabels
       });
-      
-      refetchTasks();
-    } catch (err) {
-      toast.error(`Failed to delete subtask: ${(err as Error).message}`);
     }
   };
 
-  // Function to add label to task
-  const addLabel = async (taskId: number, labelName: string) => {
-    if (!labelName.trim() || !selectedTask) return;
-    
-    // Add label to selected task
-    const updatedLabels = selectedTask.labels ? [...selectedTask.labels] : [];
-    if (!updatedLabels.includes(labelName)) {
-      updatedLabels.push(labelName);
-      
-      try {
-        // Update the task
-        const response = await taskService.updateTask(taskId, {
-          labels: updatedLabels
-        });
-        
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        
-        // Update local state
-        setSelectedTask({
-          ...selectedTask,
-          labels: updatedLabels
-        });
-        
-        refetchTasks();
-      } catch (err) {
-        toast.error(`Failed to add label: ${(err as Error).message}`);
-      }
-    }
-  };
-
-  // Function to remove label from task
-  const removeLabel = async (taskId: number, labelToRemove: string) => {
+  // Function to remove label
+  const removeLabel = (taskId: number, labelName: string) => {
     if (!selectedTask || !selectedTask.labels) return;
     
-    // Filter out the label to remove
-    const updatedLabels = selectedTask.labels.filter(label => label !== labelToRemove);
+    // Create a deep copy of the selected task
+    const updatedTask = { ...selectedTask };
     
-    try {
-      // Update the task
-      const response = await taskService.updateTask(taskId, {
-        labels: updatedLabels
-      });
-      
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      
-      // Update local state
-      setSelectedTask({
-        ...selectedTask,
-        labels: updatedLabels
-      });
-      
-      refetchTasks();
-    } catch (err) {
-      toast.error(`Failed to remove label: ${(err as Error).message}`);
-    }
+    // Filter out the label to remove
+    const updatedLabels = updatedTask.labels.filter(label => label !== labelName);
+    
+    // Update the task
+    updateTask(taskId, {
+      labels: updatedLabels
+    });
+    
+    // Update local state
+    setSelectedTask({
+      ...updatedTask,
+      labels: updatedLabels
+    });
   };
 
-  // Function to apply a specific filter - Convert priority value to number
-  const applyFilter = (filterType: 'priority' | 'status', value: string | null) => {
+  // Apply filter
+  const applyFilter = (filterType: 'priority' | 'status', value: string | number | null) => {
     setActiveFilters(prev => ({
       ...prev,
-      // If it's a priority filter and value is not null, convert to number
-      [filterType]: filterType === 'priority' && value !== null ? Number(value) : value
+      [filterType]: value
     }));
   };
 
-  // Function to reset filters
+  // Reset filters
   const resetFilters = () => {
     setActiveFilters({
       priority: null,
       status: null
     });
     setSearchQuery("");
-    setSelectedCategory(categories[0]);
+    setSelectedCategory(systemCategories[0]);
   };
 
   return {
     filteredTasks,
+    tasks,
     labels,
     categories,
     selectedCategory,
@@ -508,6 +518,7 @@ export const useTasksState = () => {
     deleteSubtask,
     handleTaskAdded,
     handleUpdateTaskStatus,
+    updateTask,
     deleteTask,
     addLabel,
     removeLabel,
