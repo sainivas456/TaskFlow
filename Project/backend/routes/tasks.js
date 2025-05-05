@@ -35,14 +35,15 @@ router.get('/', auth, async (req, res) => {
       
       // Get subtasks for this task using correct case for Sub_Tasks
       const subtasksQuery = await db.query(
-        'SELECT * FROM subtasks WHERE task_id = $1',
+        'SELECT * FROM Sub_Tasks WHERE task_id = $1',
         [task.task_id]
       );
       
+      // Map subtasks with the correct field names
       const subtasks = subtasksQuery.rows.map(row => ({
-        id: row.subtask_id,
+        id: row.sub_task_id, // Changed from subtask_id to sub_task_id
         title: row.title,
-        completed: row.completed
+        completed: row.status === 'Completed' // Convert status to completed boolean
       }));
       
       // Calculate progress based on subtasks
@@ -99,16 +100,17 @@ router.get('/:id', auth, async (req, res) => {
     
     const labels = labelQuery.rows.map(row => row.name);
     
-    // Get subtasks
+    // Get subtasks using the correct table name
     const subtasksQuery = await db.query(
-      'SELECT * FROM subtasks WHERE task_id = $1',
+      'SELECT * FROM Sub_Tasks WHERE task_id = $1',
       [req.params.id]
     );
     
+    // Map subtasks with the correct field names
     const subtasks = subtasksQuery.rows.map(row => ({
-      id: row.subtask_id,
+      id: row.sub_task_id, // Changed from subtask_id to sub_task_id
       title: row.title,
-      completed: row.completed
+      completed: row.status === 'Completed' // Convert status to completed boolean
     }));
     
     // Calculate progress
@@ -208,14 +210,17 @@ router.post('/', [
       }
     }
     
-    // Process subtasks if provided
+    // Process subtasks if provided - Updated for Sub_Tasks table
     if (subtasks && subtasks.length > 0) {
       for (const subtask of subtasks) {
+        // Convert completed boolean to status string
+        const subtaskStatus = subtask.completed ? 'Completed' : 'Pending';
+        
         await db.query(
-          `INSERT INTO subtasks 
-           (task_id, title, completed) 
+          `INSERT INTO Sub_Tasks 
+           (task_id, title, status) 
            VALUES ($1, $2, $3)`,
-          [task.task_id, subtask.title, subtask.completed || false]
+          [task.task_id, subtask.title, subtaskStatus]
         );
       }
     }
@@ -225,7 +230,7 @@ router.post('/', [
       ...task,
       labels,
       subtasks: subtasks.map((subtask, index) => ({
-        id: index + 1,
+        id: index + 1, // This will be replaced by the database-assigned ID in subsequent requests
         title: subtask.title,
         completed: subtask.completed || false
       })),
@@ -382,18 +387,21 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
     
-    // Handle subtasks if provided
+    // Handle subtasks if provided - Update for Sub_Tasks table
     if (subtasks !== undefined) {
       // First remove existing subtasks
-      await db.query('DELETE FROM subtasks WHERE task_id = $1', [taskId]);
+      await db.query('DELETE FROM Sub_Tasks WHERE task_id = $1', [taskId]);
       
       // Then add the new subtasks
       for (const subtask of subtasks) {
+        // Convert completed boolean to status string
+        const subtaskStatus = subtask.completed ? 'Completed' : 'Pending';
+        
         await db.query(
-          `INSERT INTO subtasks 
-           (task_id, title, completed) 
+          `INSERT INTO Sub_Tasks 
+           (task_id, title, status) 
            VALUES ($1, $2, $3)`,
-          [taskId, subtask.title, subtask.completed || false]
+          [taskId, subtask.title, subtaskStatus]
         );
       }
       
@@ -432,16 +440,16 @@ router.put('/:id', auth, async (req, res) => {
     
     const updatedLabels = labelQuery.rows.map(row => row.name);
     
-    // Get updated subtasks
+    // Get updated subtasks - Update for Sub_Tasks table
     const subtasksQuery = await db.query(
-      'SELECT * FROM subtasks WHERE task_id = $1',
+      'SELECT * FROM Sub_Tasks WHERE task_id = $1',
       [taskId]
     );
     
     const updatedSubtasks = subtasksQuery.rows.map(row => ({
-      id: row.subtask_id,
+      id: row.sub_task_id, // Changed from subtask_id to sub_task_id
       title: row.title,
-      completed: row.completed
+      completed: row.status === 'Completed' // Convert status to completed boolean
     }));
     
     // Return complete updated task
@@ -500,9 +508,9 @@ router.put('/:id/complete', auth, async (req, res) => {
       return res.status(404).json({ message: 'Task not found or not authorized' });
     }
     
-    // Also mark all subtasks as completed
+    // Also mark all subtasks as completed - Update for Sub_Tasks table
     await db.query(
-      'UPDATE subtasks SET completed = true WHERE task_id = $1',
+      "UPDATE Sub_Tasks SET status = 'Completed' WHERE task_id = $1",
       [req.params.id]
     );
     
@@ -519,16 +527,16 @@ router.put('/:id/complete', auth, async (req, res) => {
     
     const labels = labelQuery.rows.map(row => row.name);
     
-    // Get subtasks
+    // Get subtasks - Update for Sub_Tasks table
     const subtasksQuery = await db.query(
-      'SELECT * FROM subtasks WHERE task_id = $1',
+      'SELECT * FROM Sub_Tasks WHERE task_id = $1',
       [req.params.id]
     );
     
     const subtasks = subtasksQuery.rows.map(row => ({
-      id: row.subtask_id,
+      id: row.sub_task_id, // Changed from subtask_id to sub_task_id
       title: row.title,
-      completed: row.completed
+      completed: row.status === 'Completed' // Convert status to completed boolean
     }));
     
     res.json({

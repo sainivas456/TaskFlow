@@ -13,7 +13,11 @@ export interface Task {
   completed_at: string | null;
   labels?: string[];
   progress?: number;
-  subtasks?: any[];
+  subtasks?: {
+    id: number;
+    title: string;
+    completed: boolean; // This is now derived from the status field in the backend
+  }[];
 }
 
 export interface CreateTaskData {
@@ -24,7 +28,10 @@ export interface CreateTaskData {
   status: string;    // Using the correct status values
   labels?: string[];
   progress?: number; // Added progress property
-  subtasks?: any[];  // Added subtasks property
+  subtasks?: {
+    title: string;
+    completed: boolean; // This will be converted to status in the backend
+  }[];  
 }
 
 export const taskService = {
