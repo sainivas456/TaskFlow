@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 interface TaskDetailProps {
   open: boolean;
@@ -37,6 +38,7 @@ interface TaskDetailProps {
   onDeleteSubtask: (subtaskId: number) => void;
   onAddLabel: (label: string) => void;
   onRemoveLabel: (taskId: number, label: string) => void;
+  updateTask: (taskId: number, updatedData: any) => void;
 }
 
 export const TaskDetail = ({
@@ -50,7 +52,8 @@ export const TaskDetail = ({
   onAddSubtask,
   onDeleteSubtask,
   onAddLabel,
-  onRemoveLabel
+  onRemoveLabel,
+  updateTask
 }: TaskDetailProps) => {
   const [newSubtask, setNewSubtask] = useState("");
   const [newLabel, setNewLabel] = useState("");
@@ -97,12 +100,9 @@ export const TaskDetail = ({
     };
     
     // Call API to update task
-    // This function needs to be implemented in the parent component
-    // For now, we'll just exit edit mode
+    updateTask(selectedTask.task_id, updatedFields);
     setIsEditing(false);
-    
-    // Here you would typically call something like:
-    // onUpdateTask(selectedTask.task_id, updatedFields);
+    toast.success("Task updated successfully");
   };
 
   if (!selectedTask) return null;
@@ -356,7 +356,7 @@ export const TaskDetail = ({
               <Button 
                 onClick={() => onUpdateTaskStatus(selectedTask.task_id, selectedTask.status === "Completed" ? "Pending" : "Completed")}
               >
-                {selectedTask.status === "Completed" ? "Mark as Not Started" : "Mark as Completed"}
+                {selectedTask.status === "Completed" ? "Mark as Working" : "Mark as Completed"}
               </Button>
             </>
           )}

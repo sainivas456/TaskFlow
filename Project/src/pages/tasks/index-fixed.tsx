@@ -128,6 +128,7 @@ export default function Tasks() {
         onDeleteSubtask={deleteSubtask}
         onAddLabel={addLabel}
         onRemoveLabel={removeLabel}
+        updateTask={updateTask}
       />
 
       {/* New Task Dialog */}
