@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -176,7 +175,7 @@ export const TaskDetail = ({
               <Button 
                 variant="outline" 
                 size="icon"
-                onClick={toggleEditMode}
+                onClick={isEditing ? saveEditedTask : toggleEditMode}
                 disabled={isUpdating}
               >
                 {isEditing ? <Save size={16} /> : <Edit size={16} />}
