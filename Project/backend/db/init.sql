@@ -26,10 +26,11 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE TABLE IF NOT EXISTS labels (
   label_id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-  name VARCHAR(50) NOT NULL,
+  label_name VARCHAR(50) NOT NULL,
   color VARCHAR(20),
+  description TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(user_id, name)
+  UNIQUE(user_id, label_name)
 );
 
 -- Task_Labels junction table
@@ -61,20 +62,20 @@ CREATE TABLE IF NOT EXISTS subtasks (
 );
 
 -- Insert default labels for new users
-INSERT INTO labels (user_id, name, color)
+INSERT INTO labels (user_id, label_name, color)
 SELECT u.user_id, 'Personal', '#3B82F6'
 FROM users u
-LEFT JOIN labels l ON u.user_id = l.user_id AND l.name = 'Personal'
+LEFT JOIN labels l ON u.user_id = l.user_id AND l.label_name = 'Personal'
 WHERE l.label_id IS NULL;
 
-INSERT INTO labels (user_id, name, color)
+INSERT INTO labels (user_id, label_name, color)
 SELECT u.user_id, 'Work', '#10B981'
 FROM users u
-LEFT JOIN labels l ON u.user_id = l.user_id AND l.name = 'Work'
+LEFT JOIN labels l ON u.user_id = l.user_id AND l.label_name = 'Work'
 WHERE l.label_id IS NULL;
 
-INSERT INTO labels (user_id, name, color)
+INSERT INTO labels (user_id, label_name, color)
 SELECT u.user_id, 'Study', '#F59E0B'
 FROM users u
-LEFT JOIN labels l ON u.user_id = l.user_id AND l.name = 'Study'
+LEFT JOIN labels l ON u.user_id = l.user_id AND l.label_name = 'Study'
 WHERE l.label_id IS NULL;

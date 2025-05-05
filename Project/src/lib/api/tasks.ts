@@ -23,6 +23,8 @@ export interface CreateTaskData {
   priority: number;  // Changed from string to number
   status: string;    // Using the correct status values
   labels?: string[];
+  progress?: number; // Added progress property
+  subtasks?: any[];  // Added subtasks property
 }
 
 export const taskService = {

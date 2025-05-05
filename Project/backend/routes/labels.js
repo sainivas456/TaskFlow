@@ -29,8 +29,8 @@ router.get('/', auth, async (req, res) => {
 router.post('/', [
   auth,
   [
-    check('name', 'Name is required').not().isEmpty(),
-    check('color', 'Color is required').not().isEmpty()
+    check('label_name', 'Label name is required').not().isEmpty(),
+    check('color_code', 'Color code is required').not().isEmpty()
   ]
 ], async (req, res) => {
   const errors = validationResult(req);
@@ -39,14 +39,14 @@ router.post('/', [
     return res.status(400).json({ errors: errors.array() });
   }
   
-  const { name, color, description } = req.body;
+  const { label_name, color_code, description } = req.body;
   
   try {
     const db = req.db;
     
     const newLabel = await db.query(
-      'INSERT INTO Labels (user_id, name, color, description) VALUES ($1, $2, $3, $4) RETURNING *',
-      [req.user.id, name, color, description]
+      'INSERT INTO Labels (user_id, label_name, color_code, description) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.user.id, label_name, color_code, description]
     );
     
     res.status(201).json(newLabel.rows[0]);
@@ -60,7 +60,7 @@ router.post('/', [
 // @desc    Update a label
 // @access  Private
 router.put('/:id', auth, async (req, res) => {
-  const { name, color, description } = req.body;
+  const { label_name, color_code, description } = req.body;
   
   try {
     const db = req.db;
@@ -77,10 +77,10 @@ router.put('/:id', auth, async (req, res) => {
     
     // Update label
     const updatedLabel = await db.query(
-      'UPDATE Labels SET name = $1, color = $2, description = $3 WHERE label_id = $4 AND user_id = $5 RETURNING *',
+      'UPDATE Labels SET label_name = $1, color_code = $2, description = $3 WHERE label_id = $4 AND user_id = $5 RETURNING *',
       [
-        name || label.rows[0].name,
-        color || label.rows[0].color,
+        label_name || label.rows[0].label_name,
+        color_code || label.rows[0].color_code,
         description !== undefined ? description : label.rows[0].description,
         req.params.id,
         req.user.id

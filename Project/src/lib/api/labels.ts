@@ -4,8 +4,8 @@ import { api } from "./client";
 export interface Label {
   label_id: number;
   user_id: number;
-  name: string;
-  color: string;
+  label_name: string;
+  color_code: string;  // Correct property name to match the database schema
   description?: string;
   created_at: string;
 }
@@ -38,8 +38,8 @@ export const labelService = {
   },
   
   // Create a new label
-  createLabel: async (labelData: { name: string; color: string; description?: string }) => {
-    console.log("Creating new label:", labelData.name);
+  createLabel: async (labelData: { label_name: string; color_code: string; description?: string }) => {
+    console.log("Creating new label:", labelData.label_name);
     try {
       const response = await api.post<Label>("/labels", labelData);
       console.log("Create label response:", response);
@@ -51,7 +51,7 @@ export const labelService = {
   },
   
   // Update a label
-  updateLabel: async (labelId: number, labelData: Partial<{ name: string; color: string; description?: string }>) => {
+  updateLabel: async (labelId: number, labelData: Partial<{ label_name: string; color_code: string; description?: string }>) => {
     console.log(`Updating label ${labelId}:`, labelData);
     try {
       const response = await api.put<Label>(`/labels/${labelId}`, labelData);

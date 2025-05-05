@@ -39,8 +39,8 @@ export default function Labels() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentLabel, setCurrentLabel] = useState<Label | null>(null);
   const [newLabel, setNewLabel] = useState({
-    name: "",
-    color: colorOptions[0],
+    label_name: "",
+    color_code: colorOptions[0],
     description: ""
   });
   
@@ -65,21 +65,21 @@ export default function Labels() {
   
   // Filtered labels based on search query
   const filteredLabels = labels.filter(label => 
-    label.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    label.label_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (label.description && label.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
   
   // Create a new label
   const handleCreateLabel = async () => {
-    if (!newLabel.name.trim()) {
+    if (!newLabel.label_name.trim()) {
       toast.error("Label name is required");
       return;
     }
     
     try {
       const response = await labelService.createLabel({
-        name: newLabel.name,
-        color: newLabel.color,
+        label_name: newLabel.label_name,
+        color_code: newLabel.color_code,
         description: newLabel.description
       });
       
@@ -98,15 +98,15 @@ export default function Labels() {
   
   // Update an existing label
   const handleUpdateLabel = async () => {
-    if (!currentLabel || !newLabel.name.trim()) {
+    if (!currentLabel || !newLabel.label_name.trim()) {
       toast.error("Label name is required");
       return;
     }
     
     try {
       const response = await labelService.updateLabel(currentLabel.label_id, {
-        name: newLabel.name,
-        color: newLabel.color,
+        label_name: newLabel.label_name,
+        color_code: newLabel.color_code,
         description: newLabel.description
       });
       
@@ -149,8 +149,8 @@ export default function Labels() {
       // Edit mode
       setCurrentLabel(label);
       setNewLabel({
-        name: label.name,
-        color: label.color,
+        label_name: label.label_name,
+        color_code: label.color_code,
         description: label.description || ""
       });
     } else {
@@ -170,8 +170,8 @@ export default function Labels() {
   // Reset the form state
   const resetForm = () => {
     setNewLabel({
-      name: "",
-      color: colorOptions[0],
+      label_name: "",
+      color_code: colorOptions[0],
       description: ""
     });
     setCurrentLabel(null);
@@ -260,10 +260,10 @@ export default function Labels() {
                   <div className="flex items-center p-4">
                     <div 
                       className="h-4 w-4 rounded-full mr-3"
-                      style={{ backgroundColor: label.color }}
+                      style={{ backgroundColor: label.color_code }}
                     ></div>
                     <div className="flex-1">
-                      <h3 className="font-medium">{label.name}</h3>
+                      <h3 className="font-medium">{label.label_name}</h3>
                       {label.description && (
                         <p className="text-sm text-muted-foreground mt-1">
                           {label.description}
@@ -300,12 +300,12 @@ export default function Labels() {
           
           <div className="space-y-4 py-4">
             <div className="grid gap-2">
-              <HtmlLabel htmlFor="name">Name</HtmlLabel>
+              <HtmlLabel htmlFor="label_name">Name</HtmlLabel>
               <Input 
-                id="name"
+                id="label_name"
                 placeholder="Enter label name" 
-                value={newLabel.name}
-                onChange={(e) => setNewLabel({...newLabel, name: e.target.value})}
+                value={newLabel.label_name}
+                onChange={(e) => setNewLabel({...newLabel, label_name: e.target.value})}
               />
             </div>
             
@@ -317,12 +317,12 @@ export default function Labels() {
                     key={color}
                     type="button"
                     className={`h-8 w-8 rounded-full transition-all ${
-                      newLabel.color === color 
+                      newLabel.color_code === color 
                         ? 'ring-2 ring-primary ring-offset-2' 
                         : 'hover:scale-110'
                     }`}
                     style={{ backgroundColor: color }}
-                    onClick={() => setNewLabel({...newLabel, color})}
+                    onClick={() => setNewLabel({...newLabel, color_code: color})}
                   />
                 ))}
               </div>
@@ -356,7 +356,7 @@ export default function Labels() {
           <DialogHeader>
             <DialogTitle>Delete Label</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the label "{currentLabel?.name}"? 
+              Are you sure you want to delete the label "{currentLabel?.label_name}"? 
               This will remove the label from all tasks it is currently assigned to.
             </DialogDescription>
           </DialogHeader>

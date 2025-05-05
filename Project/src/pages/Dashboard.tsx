@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Calendar, ChevronDown, Clock, Filter, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,11 +24,21 @@ import { adaptTaskFromApi } from "@/lib/utils/taskUtils";
 import { FrontendTask } from "@/lib/utils/taskUtils";
 import { NewTaskDialog } from "@/components/task/NewTaskDialog";
 
+// Define a type for categories similar to what we have in useTasksState
+interface Category {
+  id: string;
+  name: string;
+  count: number;
+  color: string;
+  isLabel?: boolean;
+}
+
 export default function Dashboard() {
   const [progress, setProgress] = useState(0);
   const [taskFilter, setTaskFilter] = useState<string | null>(null);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [labels, setLabels] = useState<Label[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const navigate = useNavigate();
   
   // Fetch tasks using React Query
@@ -43,7 +52,6 @@ export default function Dashboard() {
     },
   });
 
-  // Fetch labels using React Query
   const { data: labelsData, isLoading: isLabelsLoading } = useQuery({
     queryKey: ["dashboard-labels"],
     queryFn: async () => {
@@ -57,10 +65,36 @@ export default function Dashboard() {
   useEffect(() => {
     if (labelsData) {
       setLabels(labelsData);
+      
+      // Create categories from labels
+      const systemCategories = [
+        { id: "all", name: "All Tasks", count: 0, color: "#9b87f5" },
+        { id: "today", name: "Today", count: 0, color: "#0EA5E9" },
+        { id: "upcoming", name: "Upcoming", count: 0, color: "#F97316" },
+        { id: "completed", name: "Completed", count: 0, color: "#8B5CF6" },
+      ];
+      
+      const labelCategories = labelsData.map(label => ({
+        id: `label-${label.label_id}`,
+        name: label.label_name,
+        color: label.color_code,
+        count: 0,
+        isLabel: true
+      }));
+      
+      setCategories([...systemCategories, ...labelCategories]);
     }
   }, [labelsData]);
 
   const tasks = tasksData || [];
+  
+  // Function to handle setting a selected category for filtering
+  const setSelectedCategory = (category: Category) => {
+    // Handle setting the selected category
+    if (category.id.startsWith('label-')) {
+      setTaskFilter(`${category.name} Label`);
+    }
+  };
   
   useEffect(() => {
     if (tasks.length > 0) {
@@ -341,14 +375,17 @@ export default function Dashboard() {
                       {labels.map((label) => (
                         <DropdownMenuItem 
                           key={`label-${label.label_id}`} 
-                          onClick={() => setTaskFilter(`${label.name} Label`)}
+                          onClick={() => {
+                            const labelCategory = categories.find(c => c.id === `label-${label.label_id}`);
+                            if (labelCategory) setSelectedCategory(labelCategory);
+                          }}
                         >
                           <div className="flex items-center gap-2">
                             <div 
                               className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: label.color }}
+                              style={{ backgroundColor: label.color_code }}
                             ></div>
-                            <span>{label.name} Label</span>
+                            <span>{label.label_name} Label</span>
                           </div>
                         </DropdownMenuItem>
                       ))}
@@ -485,7 +522,7 @@ function TaskCard({ task, onClick }: { task: FrontendTask, onClick: () => void }
           <div className="flex flex-wrap gap-2">
             {task.labels && task.labels.map((label) => {
               // Find matching label to get its color
-              const labelObj = labelsData?.find(l => l.name === String(label));
+              const labelObj = labelsData?.find(l => l.label_name === String(label));
               
               return (
                 <Badge 
@@ -493,7 +530,7 @@ function TaskCard({ task, onClick }: { task: FrontendTask, onClick: () => void }
                   variant="outline" 
                   className="bg-accent/40"
                   style={labelObj ? {
-                    borderColor: labelObj.color,
+                    borderColor: labelObj.color_code,
                     borderWidth: '1px'
                   } : {}}
                 >

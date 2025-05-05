@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { 
   CalendarDays, CheckCircle2, ChevronDown, CircleDashed, 
@@ -152,8 +151,8 @@ export default function Tasks() {
       // Create new categories from labels
       const labelCategories = labels.map(label => ({
         id: `label-${label.label_id}`,
-        name: label.name,
-        color: label.color,
+        name: label.label_name,
+        color: label.color_code,
         count: 0,
         isLabel: true
       }));
@@ -337,14 +336,14 @@ export default function Tasks() {
         } else if (category.id === "completed") {
           count = tasks.filter(task => task.status === "Completed").length;
         } else if (category.id.startsWith("label-")) {
-          // Extract label name from the ID
+          // Extract label id from the ID
           const labelId = parseInt(category.id.replace("label-", ""));
           const label = labels.find(l => l.label_id === labelId);
           
           if (label) {
             // Filter by label name
             count = tasks.filter(task => 
-              task.labels && task.labels.includes(label.name)
+              task.labels && task.labels.includes(label.label_name)
             ).length;
           }
         }
@@ -395,7 +394,7 @@ export default function Tasks() {
         
         if (label) {
           filtered = filtered.filter(task => 
-            task.labels && task.labels.includes(label.name)
+            task.labels && task.labels.includes(label.label_name)
           );
         }
       }
@@ -793,9 +792,9 @@ export default function Tasks() {
                     <div className="flex items-center gap-2">
                       <div 
                         className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: label.color }}
+                        style={{ backgroundColor: label.color_code }}
                       ></div>
-                      <span>Label: {label.name}</span>
+                      <span>Label: {label.label_name}</span>
                     </div>
                   </DropdownMenuItem>
                 ))}
@@ -832,7 +831,7 @@ export default function Tasks() {
                             <div className="flex flex-wrap gap-2 mt-3">
                               {task.labels && task.labels.map((labelName: string) => {
                                 // Find matching label to get its color
-                                const label = labels.find(l => l.name === labelName);
+                                const label = labels.find(l => l.label_name === labelName);
                                 
                                 return (
                                   <Badge 
@@ -840,7 +839,7 @@ export default function Tasks() {
                                     variant="outline" 
                                     className="bg-accent/40"
                                     style={label ? {
-                                      borderColor: label.color,
+                                      borderColor: label.color_code,
                                       borderWidth: '1px'
                                     } : {}}
                                   >
@@ -1016,7 +1015,7 @@ export default function Tasks() {
                   <div className="flex flex-wrap gap-2">
                     {selectedTask.labels && selectedTask.labels.map((labelName: string) => {
                       // Find matching label to get its color
-                      const label = labels.find(l => l.name === labelName);
+                      const label = labels.find(l => l.label_name === labelName);
                       
                       return (
                         <Badge 
@@ -1024,7 +1023,7 @@ export default function Tasks() {
                           variant="outline"
                           className="bg-accent/40 flex items-center gap-1 pl-2"
                           style={label ? {
-                            borderColor: label.color,
+                            borderColor: label.color_code,
                             borderWidth: '1px'
                           } : {}}
                         >
