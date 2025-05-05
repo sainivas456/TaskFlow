@@ -15,7 +15,8 @@ import {
   MoreHorizontal, 
   Save, 
   Trash,
-  X
+  X,
+  CircleDashed
 } from "lucide-react";
 import { TaskType } from "../types";
 import { format } from "date-fns";
@@ -168,6 +169,10 @@ export default function TaskDetailDialog({
                   <DropdownMenuItem onClick={() => handleStatusUpdate("In Progress")}>
                     <Clock className="mr-2 h-4 w-4" />
                     Mark as In Progress
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleStatusUpdate("Not Started")}>
+                    <CircleDashed className="mr-2 h-4 w-4" />
+                    Mark as Not Started
                   </DropdownMenuItem>
                   {!isExternalTask && (
                     <>
@@ -370,7 +375,18 @@ export default function TaskDetailDialog({
               </Button>
             </div>
           ) : (
-            <Button variant="outline" onClick={onClose}>Close</Button>
+            <div className="flex justify-between w-full">
+              <Button variant="outline" onClick={onClose}>Close</Button>
+              {!isExternalTask && task.status !== "Completed" && (
+                <Button 
+                  onClick={() => handleStatusUpdate("Completed")}
+                  disabled={isUpdating}
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Mark as Completed
+                </Button>
+              )}
+            </div>
           )}
         </DialogFooter>
       </DialogContent>

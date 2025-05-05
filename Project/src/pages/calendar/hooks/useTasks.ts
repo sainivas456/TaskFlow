@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { TaskType, NewTaskInput, CalendarSyncConfig } from "../types";
 import { toast } from "sonner";
 import { taskService } from "@/lib/api/tasks";
-import { adaptTaskFromApi, adaptTaskToApi } from "@/lib/utils/taskUtils";
+import { adaptTaskFromApi, adaptTaskToApi, mapStatusToDb } from "@/lib/utils/taskUtils";
 
 // Initial sync configurations
 const initialSyncConfigs: CalendarSyncConfig[] = [
@@ -114,7 +114,7 @@ export function useTasks(selectedDate: Date | undefined) {
         description: newTask.description || "",
         due_date: dueDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
         priority: newTask.priority === "High" ? 5 : newTask.priority === "Medium" ? 3 : 1,
-        status: newTask.status === "Not Started" ? "Pending" : newTask.status,
+        status: mapStatusToDb(newTask.status), // Use the mapping function
         labels: newTask.labels || []
       };
       
@@ -203,7 +203,7 @@ export function useTasks(selectedDate: Date | undefined) {
       console.log("Updating task status:", taskId, status);
       
       // Map frontend status to database status format
-      const dbStatus = status === "Not Started" ? "Pending" : status;
+      const dbStatus = mapStatusToDb(status);
       
       const response = await taskService.updateTask(taskId, { status: dbStatus });
       

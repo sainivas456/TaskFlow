@@ -12,11 +12,11 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS tasks (
   task_id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-  title VARCHAR(200) NOT NULL,
+  title VARCHAR(255) NOT NULL,
   description TEXT,
-  due_date TIMESTAMP,
-  priority VARCHAR(20) DEFAULT 'Medium',
-  status VARCHAR(20) DEFAULT 'Not Started',
+  due_date DATE,
+  priority INTEGER CHECK (priority >= 1 AND priority <= 5),
+  status VARCHAR(50) NOT NULL CHECK (status IN ('Pending', 'In Progress', 'Completed', 'Overdue')) DEFAULT 'Pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   completed_at TIMESTAMP,
   progress INTEGER DEFAULT 0

@@ -36,7 +36,7 @@ function mapStatusFromDb(dbStatus: string): "Completed" | "In Progress" | "Not S
   switch (dbStatus) {
     case "Completed": return "Completed";
     case "In Progress": return "In Progress";
-    case "Pending": return "Not Started";
+    case "Pending": return "Not Started"; // Map Pending from DB to Not Started in UI
     case "Overdue": return "Overdue";
     default: return "Not Started";
   }
@@ -47,7 +47,7 @@ export function mapStatusToDb(status: string): string {
   switch (status) {
     case "Completed": return "Completed";
     case "In Progress": return "In Progress";
-    case "Not Started": return "Pending";
+    case "Not Started": return "Pending"; // Map Not Started from UI to Pending in DB
     case "Overdue": return "Overdue";
     default: return "Pending";
   }
