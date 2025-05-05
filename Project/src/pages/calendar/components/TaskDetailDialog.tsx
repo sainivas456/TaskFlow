@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,6 @@ import {
   Calendar as CalendarIcon, 
   CheckCircle2, 
   Clock, 
-  CircleDashed,
   Edit, 
   ExternalLink, 
   MoreHorizontal, 
@@ -168,10 +168,6 @@ export default function TaskDetailDialog({
                   <DropdownMenuItem onClick={() => handleStatusUpdate("In Progress")}>
                     <Clock className="mr-2 h-4 w-4" />
                     Mark as In Progress
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleStatusUpdate("Not Started")}>
-                    <CircleDashed className="mr-2 h-4 w-4" />
-                    Mark as Not Started
                   </DropdownMenuItem>
                   {!isExternalTask && (
                     <>
