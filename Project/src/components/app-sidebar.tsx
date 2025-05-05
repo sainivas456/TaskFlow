@@ -55,7 +55,8 @@ export function AppSidebar() {
   // Use react-query to fetch labels
   const { 
     data: labels = [], 
-    isLoading: isLabelsLoading 
+    isLoading: isLabelsLoading,
+    error: labelsError
   } = useQuery({
     queryKey: ["sidebar-labels"],
     queryFn: async () => {
@@ -63,6 +64,8 @@ export function AppSidebar() {
         const response = await labelService.getAllLabels();
         
         if (response.error) {
+          console.error("Error fetching sidebar labels:", response.error);
+          toast.error("Failed to load labels");
           throw new Error(response.error);
         }
         
@@ -137,12 +140,30 @@ export function AppSidebar() {
                 ))}
               </div>
 
-              {expanded && labels.length > 0 && (
+              {expanded && (
                 <div className="mt-6">
                   <div className="px-3 py-1.5 text-sm font-medium text-muted-foreground">
                     Labels
                   </div>
                   <div className="space-y-1 mt-1">
+                    {isLabelsLoading && (
+                      <div className="flex justify-center my-4">
+                        <Loader2 size={18} className="animate-spin text-muted-foreground" />
+                      </div>
+                    )}
+                    
+                    {labelsError && (
+                      <div className="px-3 py-2 text-sm text-destructive">
+                        Failed to load labels
+                      </div>
+                    )}
+
+                    {!isLabelsLoading && labels.length === 0 && !labelsError && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        No labels found
+                      </div>
+                    )}
+                    
                     {labels.map((label) => (
                       <Link
                         key={`label-${label.label_id}`}
@@ -155,18 +176,12 @@ export function AppSidebar() {
                       >
                         <div 
                           className="h-3 w-3 rounded-full mr-3"
-                          style={{ backgroundColor: label.color }}
+                          style={{ backgroundColor: label.color_code }}
                         ></div>
-                        <span>{label.name}</span>
+                        <span>{label.label_name}</span>
                       </Link>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {expanded && isLabelsLoading && (
-                <div className="flex justify-center my-4">
-                  <Loader2 size={18} className="animate-spin text-muted-foreground" />
                 </div>
               )}
             </div>

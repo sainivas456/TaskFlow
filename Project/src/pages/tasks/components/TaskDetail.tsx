@@ -107,6 +107,23 @@ export const TaskDetail = ({
 
   if (!selectedTask) return null;
 
+  // Map between UI status and database status
+  const getToggleStatus = () => {
+    if (selectedTask.status === "Completed") {
+      return "Pending"; // In DB, this will be shown as "Not Started" in UI
+    } else {
+      return "Completed";
+    }
+  };
+
+  const getButtonLabel = () => {
+    if (selectedTask.status === "Completed") {
+      return "Mark as Working";
+    } else {
+      return "Mark as Completed";
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
@@ -354,9 +371,9 @@ export const TaskDetail = ({
                 Close
               </Button>
               <Button 
-                onClick={() => onUpdateTaskStatus(selectedTask.task_id, selectedTask.status === "Completed" ? "Pending" : "Completed")}
+                onClick={() => onUpdateTaskStatus(selectedTask.task_id, getToggleStatus())}
               >
-                {selectedTask.status === "Completed" ? "Mark as Working" : "Mark as Completed"}
+                {getButtonLabel()}
               </Button>
             </>
           )}
